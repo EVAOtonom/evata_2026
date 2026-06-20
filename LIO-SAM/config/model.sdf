@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<sdf version="1.8">
+
+  <model name="Evata">
+    <pose>0 0 0 0 0 0</pose>
+
+    <!-- Ana yer referans frame'i -->
+    <link name="base_footprint">
+      <pose>0 0 0 0 0 0</pose>
+    </link>
+
+    <!-- Araç gövde frame'i -->
+    <link name="base_link">
+      <pose>0 0 0 0 0 0</pose>
+
+      <inertial>
+        <mass>150</mass>
+        <inertia>
+          <ixx>1.0</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>1.0</iyy>
+          <iyz>0.0</iyz>
+          <izz>1.0</izz>
+        </inertia>
+      </inertial>
+
+      <!-- İstersen gövdeyi RViz/Gazebo'da görmek için basit kutu -->
+      <visual name="base_visual">
+        <pose>0 0 0.3 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>1.8 1.0 0.3</size>
+          </box>
+        </geometry>
+      </visual>
+
+      <collision name="base_collision">
+        <pose>0 0 0.3 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>1.8 1.0 0.3</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="base_joint" type="fixed">
+      <parent>base_footprint</parent>
+      <child>base_link</child>
+      <pose>0 0 0 0 0 0</pose>
+    </joint>
+
+
+    <!-- Robosense / RS Helios 32 LiDAR -->
+    <!-- LiDAR yerden yüksekliği: 1.21 m -->
+    <!-- IMU ile alt alta kabul edildi: x=-0.45, y=0 -->
+    <link name="rslidar">
+      <pose>0 0 0 0 0 0</pose>
+
+      <inertial>
+        <mass>0.2</mass>
+        <inertia>
+          <ixx>0.0001</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>0.0001</iyy>
+          <iyz>0.0</iyz>
+          <izz>0.0001</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="rslidar_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.06</radius>
+            <length>0.08</length>
+          </cylinder>
+        </geometry>
+      </visual>
+    </link>
+
+    <joint name="rslidar_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>rslidar</child>
+
+      <!-- base_link -> rslidar -->
+      <pose>-0.45 0 1.21 0 0 0</pose>
+    </joint>
+
+
+    <!-- Microstrain 3DM-GX5-45 IMU -->
+    <!-- IMU yerden yüksekliği: 0.92 m -->
+    <!-- LiDAR ile alt alta kabul edildi: x=-0.45, y=0 -->
+    <link name="imu_link">
+      <pose>0 0 0 0 0 0</pose>
+
+      <inertial>
+        <mass>0.05</mass>
+        <inertia>
+          <ixx>0.00001</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>0.00001</iyy>
+          <iyz>0.0</iyz>
+          <izz>0.00001</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="imu_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.06 0.04 0.02</size>
+          </box>
+        </geometry>
+      </visual>
+    </link>
+
+    <joint name="imu_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>imu_link</child>
+
+      <!-- base_link -> imu_link -->
+      <pose>-0.45 0 0.92 0 0 0</pose>
+    </joint>
+
+  </model>
+</sdf>
