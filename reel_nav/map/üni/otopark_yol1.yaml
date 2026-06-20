@@ -1,0 +1,8 @@
+image: yol2.pgm
+free_thresh: 0.25
+mode: trinary
+negate: 0
+occupied_thresh: 0.65
+origin: [-170.53885, -161.22458, 0.0]
+resolution: 0.05
+

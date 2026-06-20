@@ -1,0 +1,6 @@
+image: video.pgm
+resolution: 0.05
+origin: [-149.23215, -19.481277, 0.0]
+occupied_thresh: 0.65
+free_thresh: 0.2
+negate: 0

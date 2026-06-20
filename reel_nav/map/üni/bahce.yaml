@@ -1,0 +1,8 @@
+image: bahce.pgm
+free_thresh: 0.25
+mode: trinary
+negate: 0
+occupied_thresh: 0.65
+origin: [-95.0084, -91.910828, 0.0]
+resolution: 0.05
+
