@@ -19,7 +19,7 @@
     odomTopic: "bos"
 
     # GPS kullanmıyoruz.
-    gpsTopic: "/gnss_1/llh_position"
+    gpsTopic: "bos1"
 
 
     # =========================
@@ -36,8 +36,8 @@
     # GPS SETTINGS
     # =========================
 
-    useImuHeadingInitialization: true
-    useGpsElevation: true
+    useImuHeadingInitialization: false
+    useGpsElevation: false
     gpsCovThreshold: 2.0
     poseCovThreshold: 25.0
 

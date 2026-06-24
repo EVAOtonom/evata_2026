@@ -139,20 +139,18 @@ controller_server:
       time_steps: 64
       model_dt: 0.05
       batch_size: 2000
+      vx_max: 0.6
+      vx_min: -0.2
       vx_std: 0.2
-      vy_std: 0.2
-      wz_std: 0.4
-      vx_max: 1.5
-      vx_min: -1.50
-      vy_max: 0.0
-      wz_max: 2.0
+      wz_std: 0.15
+      wz_max: 0.35
       iteration_count: 10
       prune_distance: 1.7
       transform_tolerance: 0.5
       motion_model: "Ackermann"
-      visualize: true
+      visualize: false
       AckermannConstraints:
-        min_turning_r: 0.9
+        min_turning_r: 1.5
       critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic", "TwirlingCritic"]
       ConstraintCritic:
         enabled: true
@@ -176,8 +174,8 @@ controller_server:
       CostCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 3.81
-        critical_cost: 300.0
+        cost_weight: 20.0
+        critical_cost: 150.0
         consider_footprint: true
         collision_cost: 1000000.0
         near_goal_distance: 1.0
@@ -185,25 +183,25 @@ controller_server:
       PathAlignCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 4.0
+        cost_weight: 12.0
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
-        threshold_to_consider: 0.75
-        offset_from_furthest: 20
+        threshold_to_consider: 1.5
+        offset_from_furthest: 8
         use_path_orientations: false
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 3.0
-        offset_from_furthest: 5
-        threshold_to_consider: 0.75
+        cost_weight: 10.0
+        offset_from_furthest: 3
+        threshold_to_consider: 1.5
       PathAngleCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 2.0
+        cost_weight: 6.0
         offset_from_furthest: 4
         threshold_to_consider: 0.5
-        max_angle_to_furthest: 1.0
+        max_angle_to_furthest: 0.6
         mode: 0
       TwirlingCritic:
         enabled: true
@@ -227,7 +225,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 1.2
-        inflation_radius: 3.0
+        inflation_radius: 1.5
         always_send_full_costmap: False
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
@@ -304,7 +302,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 1.2
-        inflation_radius: 3.0
+        inflation_radius: 1.5
         always_send_full_costmap: False
 
 map_server:
@@ -339,11 +337,11 @@ planner_server:
       analytic_expansion_max_length: 3.0
       analytic_expansion_max_cost: 200.0
       analytic_expansion_max_cost_override: false
-      minimum_turning_radius: 2.5
+      minimum_turning_radius: 1.5
       reverse_penalty: 31.0
       change_penalty: 0.0
-      non_straight_penalty: 1.5
-      cost_penalty: 2.0
+      non_straight_penalty: 1.0
+      cost_penalty: 5.0
       retrospective_penalty: 0.015
       lookup_table_size: 20.0
       cache_obstacle_heuristic: false
@@ -408,10 +406,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [1.0, 0.0, 1.0]
-    min_velocity: [-0.26, 0.0, -1.0]
-    max_accel: [2.5, 0.0, 3.2]
-    max_decel: [-2.5, 0.0, -3.2]
+    max_velocity: [0.6, 0.0, 0.35]
+    min_velocity: [-0.2, 0.0, -0.35]
+    max_accel: [0.5, 0.0, 0.5]
+    max_decel: [-0.5, 0.0, -0.5]
     odom_topic: "odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
