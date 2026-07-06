@@ -19,7 +19,7 @@
     odomTopic: "bos"
 
     # GPS kullanmıyoruz.
-    gpsTopic: "bos1"
+    gpsTopic: "/gnss_1/llh_position"
 
 
     # =========================
@@ -31,12 +31,17 @@
     odometryFrame: "odom"
     mapFrame: "map"
 
+    # LIO-SAM TF yayını:
+    # true  -> LIO-SAM odom -> base_footprint TF yayınlar
+    # false -> LIO-SAM sadece odometry topic yayınlar, TF'yi EKF veya başka node yayınlar
+    publishTF: false
+
 
     # =========================
     # GPS SETTINGS
     # =========================
 
-    useImuHeadingInitialization: false
+    useImuHeadingInitialization: true
     useGpsElevation: false
     gpsCovThreshold: 2.0
     poseCovThreshold: 25.0
@@ -99,7 +104,7 @@
     # lidar -> imu = imu - lidar
     #              = [0.0, 0.0, -0.29]
 
-    extrinsicTrans: [0.0, 0.0, -0.29]
+    extrinsicTrans: [0.0, 0.0, -0.15]
 
     # İlk temiz test için identity.
     # Eğer araç sabitken X/Y kayarsa veya Large velocity verirse

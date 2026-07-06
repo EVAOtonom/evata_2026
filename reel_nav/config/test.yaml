@@ -14,7 +14,7 @@ amcl:
     base_frame_id: "base_footprint"
     global_frame_id: "map"
     odom_frame_id: "odom"
-    tf_broadcast: true
+    tf_broadcast: false
     transform_tolerance: 0.5
 
     ### Lazer modeli ###

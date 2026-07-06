@@ -11,9 +11,9 @@
       scan_max_range: 150.0
       scan_min_range: 3.0
       scan_period: 0.1
-      use_pcd_map: true
-      map_path: "/home/oguzcan/Downloads/service_LOAM/GlobalMap.pcd"
-      set_initial_pose: true
+      use_pcd_map: false
+      map_path: "/home/real_ws/map.pcd"
+      set_initial_pose: false
       initial_pose_x: 0.0
       initial_pose_y: 0.0
       initial_pose_z: 0.0
@@ -22,11 +22,11 @@
       initial_pose_qz: 0.0
       initial_pose_qw: 0.0
       use_odom: false
-      use_imu: false
+      use_imu: true
       enable_debug: true
       enable_map_odom_tf: false
       global_frame_id: map
       odom_frame_id: odom
-      base_frame_id: base_footprint
+      base_frame_id: base_link
       enable_timer_publishing: false
       pose_publish_frequency: 30.0

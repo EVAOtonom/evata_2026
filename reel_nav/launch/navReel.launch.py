@@ -61,6 +61,16 @@ def generate_launch_description():
             'use_sim_time',
             default_value='false'
         ),
+        
+        
+        # Sabit dönüşler
+        Node(
+              package='tf2_ros',
+              executable='static_transform_publisher',
+              name='static_tf_map_to_odom',
+              output='log',
+              arguments=['0', '0', '0', '0.78539816339', '0', '0', 'map', 'odom']
+        ),        
 
         Node(
             package='robot_state_publisher',
@@ -72,6 +82,7 @@ def generate_launch_description():
                 'use_sim_time': False
             }]
         ),
+        
 
         Node(
             package='joint_state_publisher',
@@ -83,33 +94,39 @@ def generate_launch_description():
             }]
         ),
 
+
+
+
+
+
+        # Encoder odometriyi Odometry olarak yayımlayan node
+        Node(
+            package='reel_evata',
+            executable='OdometerListener',
+            name='encoder_odom_publisher',
+            output='screen',
+            parameters=[{'use_sim_time': False}]
+        ),
+
+
 	Node(
-	    package='reel_evata',
-	    executable='OdometerListener',
-	    name='initial_pose_setter',
+	    package='robot_localization',
+	    executable='navsat_transform_node',
+	    name='navsat_transform_node',
 	    output='screen',
-	    parameters=[{
-		'initialpose_topic': '/initialpose',
-		'ekf_set_pose_service': '/set_pose',
-		'force_frame_id': 'map',
-		'use_current_time': True
-	    }]
+	    parameters=[ekf_params],
+	    remappings=[
+		('imu/data', '/imu/data'),
+		('gps/fix', '/gnss_1/llh_position'),
+
+		# NavSat'ın referans odometrisi
+		('odometry/filtered', '/odom'),
+
+		('odometry/gps', '/odometry/gps'),
+		('gps/filtered', '/gps/filtered')
+	    ]
 	),
 
-        Node(
-            package='robot_localization',
-            executable='navsat_transform_node',
-            name='navsat_transform_node',
-            output='screen',
-            parameters=[ekf_params],
-            remappings=[
-                ('imu/data', '/imu/data'),
-                ('gps/fix', '/gnss_1/llh_position'),
-                ('odometry/filtered', '/odom'),
-                ('odometry/gps', '/odometry/gps'),
-                ('gps/filtered', '/gps/filtered')
-            ]
-        ),
 
         Node(
             package='robot_localization',

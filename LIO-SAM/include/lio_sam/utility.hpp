@@ -81,6 +81,9 @@ public:
     string odometryFrame;
     string mapFrame;
 
+    // TF publishing
+    bool publishTF;
+
     // GPS Settings
     bool useImuHeadingInitialization;
     bool useGpsElevation;
@@ -171,6 +174,9 @@ public:
         get_parameter("odometryFrame", odometryFrame);
         declare_parameter("mapFrame", "map");
         get_parameter("mapFrame", mapFrame);
+
+        declare_parameter("publishTF", true);
+        get_parameter("publishTF", publishTF);
 
         declare_parameter("useImuHeadingInitialization", false);
         get_parameter("useImuHeadingInitialization", useImuHeadingInitialization);

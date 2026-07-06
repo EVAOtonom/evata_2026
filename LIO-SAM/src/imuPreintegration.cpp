@@ -125,25 +125,28 @@ public:
         pubImuOdometry->publish(laserOdometry);
 
         // publish tf
-        if(lidarFrame != baselinkFrame)
+        if (publishTF)
         {
-            try
+            if(lidarFrame != baselinkFrame)
             {
-                tf2::fromMsg(tfBuffer->lookupTransform(
-                    lidarFrame, baselinkFrame, rclcpp::Time(0)), lidar2Baselink);
+                try
+                {
+                    tf2::fromMsg(tfBuffer->lookupTransform(
+                        lidarFrame, baselinkFrame, rclcpp::Time(0)), lidar2Baselink);
+                }
+                catch (tf2::TransformException ex)
+                {
+                    RCLCPP_ERROR(get_logger(), "%s", ex.what());
+                }
+                tf2::Stamped<tf2::Transform> tb(
+                    tCur * lidar2Baselink, tf2_ros::fromMsg(odomMsg->header.stamp), odometryFrame);
+                tCur = tb;
             }
-            catch (tf2::TransformException ex)
-            {
-                RCLCPP_ERROR(get_logger(), "%s", ex.what());
-            }
-            tf2::Stamped<tf2::Transform> tb(
-                tCur * lidar2Baselink, tf2_ros::fromMsg(odomMsg->header.stamp), odometryFrame);
-            tCur = tb;
+            geometry_msgs::msg::TransformStamped ts;
+            tf2::convert(tCur, ts);
+            ts.child_frame_id = baselinkFrame;
+            tfBroadcaster->sendTransform(ts);
         }
-        geometry_msgs::msg::TransformStamped ts;
-        tf2::convert(tCur, ts);
-        ts.child_frame_id = baselinkFrame;
-        tfBroadcaster->sendTransform(ts);
 
         // publish IMU path
         static nav_msgs::msg::Path imuPath;

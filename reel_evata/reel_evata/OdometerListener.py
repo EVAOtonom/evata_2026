@@ -1,169 +1,118 @@
-import math
+#!/usr/bin/env python3
 
 import rclpy
 from rclpy.node import Node
-
-from geometry_msgs.msg import PoseWithCovarianceStamped
-from geometry_msgs.msg import TransformStamped
-
-from tf2_ros import Buffer, TransformListener, TransformBroadcaster
-from tf_transformations import (
-    quaternion_from_euler,
-    euler_from_quaternion,
-    quaternion_multiply,
-    quaternion_inverse,
-)
+from std_msgs.msg import Float32
+from nav_msgs.msg import Odometry
 
 
-class InitialPoseMapToOdom(Node):
+class WheelEncoderOdometry(Node):
     def __init__(self):
-        super().__init__('initial_pose_setter')
+        super().__init__('wheel_encoder_odometry')
 
-        self.declare_parameter('initialpose_topic', '/initialpose')
-        self.declare_parameter('map_frame', 'map')
+        self.declare_parameter('encoder_topic', '/stm/read_odometer')
+        self.declare_parameter('odom_topic', '/teker')
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_footprint')
-        self.declare_parameter('publish_rate', 30.0)
+        self.declare_parameter('publish_rate', 20.0)
 
-        self.initialpose_topic = self.get_parameter('initialpose_topic').value
-        self.map_frame = self.get_parameter('map_frame').value
+        self.encoder_topic = self.get_parameter('encoder_topic').value
+        self.odom_topic = self.get_parameter('odom_topic').value
         self.odom_frame = self.get_parameter('odom_frame').value
         self.base_frame = self.get_parameter('base_frame').value
-        self.publish_rate = float(self.get_parameter('publish_rate').value)
+        publish_rate = self.get_parameter('publish_rate').value
 
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.tf_broadcaster = TransformBroadcaster(self)
+        self.x = 0.0
+        self.last_encoder_cm = None
+        self.last_time = self.get_clock().now()
+        self.linear_x = 0.0
 
-        self.map_to_odom = TransformStamped()
-        self.map_to_odom.header.frame_id = self.map_frame
-        self.map_to_odom.child_frame_id = self.odom_frame
-        self.map_to_odom.transform.translation.x = 0.0
-        self.map_to_odom.transform.translation.y = 0.0
-        self.map_to_odom.transform.translation.z = 0.0
-        self.map_to_odom.transform.rotation.x = 0.0
-        self.map_to_odom.transform.rotation.y = 0.0
-        self.map_to_odom.transform.rotation.z = 0.0
-        self.map_to_odom.transform.rotation.w = 1.0
+        self.odom_pub = self.create_publisher(Odometry, self.odom_topic, 10)
 
         self.create_subscription(
-            PoseWithCovarianceStamped,
-            self.initialpose_topic,
-            self.initial_pose_callback,
+            Float32,
+            self.encoder_topic,
+            self.encoder_callback,
             10
         )
 
-        self.create_timer(
-            1.0 / self.publish_rate,
-            self.publish_map_to_odom
+        self.timer = self.create_timer(
+            1.0 / publish_rate,
+            self.publish_odometry
         )
 
         self.get_logger().info(
-            f"InitialPose map->odom setter started:\n"
-            f"  initialpose_topic: {self.initialpose_topic}\n"
-            f"  map_frame        : {self.map_frame}\n"
-            f"  odom_frame       : {self.odom_frame}\n"
-            f"  base_frame       : {self.base_frame}\n"
-            f"  publish_rate     : {self.publish_rate}"
+            f"Wheel encoder odometry started: {self.encoder_topic} -> {self.odom_topic}"
         )
 
-    def yaw_from_quat(self, q):
-        _, _, yaw = euler_from_quaternion([
-            q.x,
-            q.y,
-            q.z,
-            q.w
-        ])
-        return yaw
+    def encoder_callback(self, msg: Float32):
+        current_encoder_cm = msg.data
+        now = self.get_clock().now()
+        dt = (now - self.last_time).nanoseconds / 1e9
 
-    def normalize_angle(self, angle):
-        while angle > math.pi:
-            angle -= 2.0 * math.pi
-        while angle < -math.pi:
-            angle += 2.0 * math.pi
-        return angle
-
-    def initial_pose_callback(self, msg: PoseWithCovarianceStamped):
-        try:
-            odom_to_base = self.tf_buffer.lookup_transform(
-                self.odom_frame,
-                self.base_frame,
-                rclpy.time.Time()
-            )
-        except Exception as e:
-            self.get_logger().warn(
-                f"Cannot get {self.odom_frame} -> {self.base_frame} transform: {e}"
-            )
+        if self.last_encoder_cm is None or dt <= 0.0:
+            self.last_encoder_cm = current_encoder_cm
+            self.last_time = now
+            self.linear_x = 0.0
             return
 
-        desired_x = msg.pose.pose.position.x
-        desired_y = msg.pose.pose.position.y
-        desired_yaw = self.yaw_from_quat(msg.pose.pose.orientation)
+        delta_cm = current_encoder_cm - self.last_encoder_cm
+        delta_m = delta_cm / 100.0
 
-        current_x = odom_to_base.transform.translation.x
-        current_y = odom_to_base.transform.translation.y
-        current_yaw = self.yaw_from_quat(odom_to_base.transform.rotation)
+        self.linear_x = delta_m / dt
+        self.x += delta_m
 
-        map_to_odom_yaw = self.normalize_angle(desired_yaw - current_yaw)
+        self.last_encoder_cm = current_encoder_cm
+        self.last_time = now
 
-        cos_yaw = math.cos(map_to_odom_yaw)
-        sin_yaw = math.sin(map_to_odom_yaw)
+    def publish_odometry(self):
+        now = self.get_clock().now()
 
-        rotated_current_x = cos_yaw * current_x - sin_yaw * current_y
-        rotated_current_y = sin_yaw * current_x + cos_yaw * current_y
+        odom_msg = Odometry()
+        odom_msg.header.stamp = now.to_msg()
+        odom_msg.header.frame_id = self.odom_frame
+        odom_msg.child_frame_id = self.base_frame
 
-        map_to_odom_x = desired_x - rotated_current_x
-        map_to_odom_y = desired_y - rotated_current_y
+        odom_msg.pose.pose.position.x = self.x
+        odom_msg.pose.pose.position.y = 0.0
+        odom_msg.pose.pose.position.z = 0.0
 
-        q = quaternion_from_euler(0.0, 0.0, map_to_odom_yaw)
+        odom_msg.pose.pose.orientation.x = 0.0
+        odom_msg.pose.pose.orientation.y = 0.0
+        odom_msg.pose.pose.orientation.z = 0.0
+        odom_msg.pose.pose.orientation.w = 1.0
 
-        self.map_to_odom.header.frame_id = self.map_frame
-        self.map_to_odom.child_frame_id = self.odom_frame
+        odom_msg.twist.twist.linear.x = self.linear_x
+        odom_msg.twist.twist.linear.y = 0.0
+        odom_msg.twist.twist.angular.z = 0.0
 
-        self.map_to_odom.transform.translation.x = map_to_odom_x
-        self.map_to_odom.transform.translation.y = map_to_odom_y
-        self.map_to_odom.transform.translation.z = 0.0
+        odom_msg.pose.covariance = [
+            0.5, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 999.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 999.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 999.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 999.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 999.0
+        ]
 
-        self.map_to_odom.transform.rotation.x = q[0]
-        self.map_to_odom.transform.rotation.y = q[1]
-        self.map_to_odom.transform.rotation.z = q[2]
-        self.map_to_odom.transform.rotation.w = q[3]
+        odom_msg.twist.covariance = [
+            0.1, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 999.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 999.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 999.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 999.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 999.0
+        ]
 
-        self.get_logger().info(
-            f"Initial pose applied by changing map->odom:\n"
-            f"  desired map pose:\n"
-            f"    x   : {desired_x:.3f}\n"
-            f"    y   : {desired_y:.3f}\n"
-            f"    yaw : {math.degrees(desired_yaw):.2f} deg\n"
-            f"  current odom pose:\n"
-            f"    x   : {current_x:.3f}\n"
-            f"    y   : {current_y:.3f}\n"
-            f"    yaw : {math.degrees(current_yaw):.2f} deg\n"
-            f"  new map->odom:\n"
-            f"    x   : {map_to_odom_x:.3f}\n"
-            f"    y   : {map_to_odom_y:.3f}\n"
-            f"    yaw : {math.degrees(map_to_odom_yaw):.2f} deg"
-        )
-
-        self.publish_map_to_odom()
-
-    def publish_map_to_odom(self):
-        self.map_to_odom.header.stamp = self.get_clock().now().to_msg()
-        self.tf_broadcaster.sendTransform(self.map_to_odom)
+        self.odom_pub.publish(odom_msg)
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = InitialPoseMapToOdom()
-
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+    node = WheelEncoderOdometry()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == '__main__':
