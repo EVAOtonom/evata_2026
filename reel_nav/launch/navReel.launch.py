@@ -69,7 +69,7 @@ def generate_launch_description():
               executable='static_transform_publisher',
               name='static_tf_map_to_odom',
               output='log',
-              arguments=['0', '0', '0', '0.78539816339', '0', '0', 'map', 'odom']
+              arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom']
         ),        
 
         Node(
@@ -116,11 +116,11 @@ def generate_launch_description():
 	    output='screen',
 	    parameters=[ekf_params],
 	    remappings=[
-		('imu/data', '/imu/data'),
+		('imu', '/imu/data'),
 		('gps/fix', '/gnss_1/llh_position'),
 
 		# NavSat'ın referans odometrisi
-		('odometry/filtered', '/odom'),
+		('odometry/filtered', '/teker'),
 
 		('odometry/gps', '/odometry/gps'),
 		('gps/filtered', '/gps/filtered')

@@ -1,8 +1,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
@@ -11,16 +10,13 @@ import xacro
 def generate_launch_description():
     dir_path = os.path.dirname(os.path.realpath(__file__))
     src_dir = dir_path.split('/install')[0]
-    sdf_path = os.path.join(src_dir, "src", "reel_nav", 'final_deneme.sdf')
+
+    sdf_path = os.path.join(src_dir, "src", "reel_nav", "final_deneme.sdf")
+    ekf_params = os.path.join(src_dir, "src", "reel_nav", "config", "ekf.yaml")
+    
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
-    slam_mode = LaunchConfiguration('slam', default='True')
 
-    rviz_config_dir = os.path.join(src_dir, "src", "reel_nav", "config", "nav2_evata_view.rviz")
-    nav2_launch_file_dir = os.path.join(get_package_share_directory('nav2_bringup'), 'launch')
-
-
-    # Xacro dosyasını oku ve işle
     doc = xacro.parse(open(sdf_path))
     xacro.process_doc(doc)
 
@@ -31,16 +27,14 @@ def generate_launch_description():
             description='Use simulation clock if true'
         ),
 
-        # Sabit dönüşler
+        # map -> odom sabit TF
         Node(
-              package='tf2_ros',
-              executable='static_transform_publisher',
-              name='static_tf_map_to_odom',
-              output='log',
-              arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom']
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='static_tf_map_to_odom',
+            output='log',
+            arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom']
         ),
-
-
 
         # joint_state_publisher
         Node(
@@ -48,10 +42,11 @@ def generate_launch_description():
             executable='joint_state_publisher',
             name='joint_state_publisher',
             output='screen',
-            parameters=[{'use_sim_time': use_sim_time,
-                         'robot_description': doc.toxml()}]
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'robot_description': doc.toxml()
+            }]
         ),
-
 
         # robot_state_publisher
         Node(
@@ -59,24 +54,26 @@ def generate_launch_description():
             executable='robot_state_publisher',
             name='robot_state_publisher',
             output='screen',
-            parameters=[{'use_sim_time': use_sim_time,
-                         'robot_description': doc.toxml()}]
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'robot_description': doc.toxml()
+            }]
         ),
 
-
-        
-
-
-
-        # RViz
+        # NavSat Transform
         Node(
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
-            arguments=['-d', rviz_config_dir],
-            parameters=[{'use_sim_time': use_sim_time}],
-            output='screen'
+            package='robot_localization',
+            executable='navsat_transform_node',
+            name='navsat_transform_node',
+            output='screen',
+            parameters=[ekf_params],
+            remappings=[
+                ('imu', '/imu/data'),
+                ('gps/fix', '/gnss_1/llh_position'),
+                ('odometry/filtered', '/teker'),
+                ('odometry/gps', '/odometry/gps'),
+                ('gps/filtered', '/gps/filtered')
+            ]
         ),
 
     ])
-

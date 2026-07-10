@@ -88,7 +88,8 @@ navsat_transform_node:
     publish_filtered_gps: true
 
     use_odometry_yaw: false
-    wait_for_datum: false
+    wait_for_datum: true
+    datum: [41.05694236, 28.82040922, 1.74683]
 
     base_link_frame: base_footprint
     world_frame: map

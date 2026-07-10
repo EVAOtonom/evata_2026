@@ -3,5 +3,5 @@ image: harita.pgm
 mode: trinary
 negate: 0
 occupied_thresh: 0.65
-origin: [-87.3403091430664, -87.01099395751953, 0.0]
+origin: [-9.242947578430176, -72.643310546875, 0.0]
 resolution: 0.05

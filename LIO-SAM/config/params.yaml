@@ -16,10 +16,10 @@
 
     # LIO-SAM iç IMU preintegration odometry topic'i.
     # Harici EKF/encoder odom buraya yazılmaz.
-    odomTopic: "bos"
+    odomTopic: "/teker"
 
     # GPS kullanmıyoruz.
-    gpsTopic: "/gnss_1/llh_position"
+    gpsTopic: "odometry/gps"
 
 
     # =========================
@@ -43,8 +43,8 @@
 
     useImuHeadingInitialization: true
     useGpsElevation: false
-    gpsCovThreshold: 2.0
-    poseCovThreshold: 25.0
+    gpsCovThreshold: 20.0
+    poseCovThreshold: 1.0
 
 
     # =========================
