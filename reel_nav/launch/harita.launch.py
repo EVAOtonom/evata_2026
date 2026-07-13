@@ -35,6 +35,8 @@ def generate_launch_description():
             output='log',
             arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom']
         ),
+        
+            
 
         # joint_state_publisher
         Node(
@@ -60,20 +62,6 @@ def generate_launch_description():
             }]
         ),
 
-        # NavSat Transform
-        Node(
-            package='robot_localization',
-            executable='navsat_transform_node',
-            name='navsat_transform_node',
-            output='screen',
-            parameters=[ekf_params],
-            remappings=[
-                ('imu', '/imu/data'),
-                ('gps/fix', '/gnss_1/llh_position'),
-                ('odometry/filtered', '/teker'),
-                ('odometry/gps', '/odometry/gps'),
-                ('gps/filtered', '/gps/filtered')
-            ]
-        ),
+
 
     ])

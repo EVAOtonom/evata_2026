@@ -1,0 +1,8 @@
+[Bb]uild*/
+build-doc/
+.vscode/
+int/
+.idea/
+.vs/
+
+src/c/mip/mip_version.h

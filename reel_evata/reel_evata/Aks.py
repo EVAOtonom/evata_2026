@@ -2,7 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32, Bool, Int8, Int32
+from std_msgs.msg import Float32, Bool, Int8, Int32, Int16
 import minimalmodbus
 from enum import Enum
 import time
@@ -77,7 +77,7 @@ class STMCommunication(Node):
 
 
         # Subscribers
-        self.create_subscription(Int8, '/stm/steering_angle', self.steering_angle_callback, 10)
+        self.create_subscription(Int16, '/stm/steering_angle', self.steering_angle_callback, 10)
         self.create_subscription(Int8, '/stm/motor_power', self.motor_power_callback, 10)
         self.create_subscription(Bool, '/stm/reset_odometer', self.reset_odometer_callback, 10)
         self.create_subscription(Bool, '/stm/brake', self.brake_callback, 10)

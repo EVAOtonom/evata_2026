@@ -1,0 +1,23 @@
+# Service definition for the MIP command https://files.microstrain.com/GQ7+User+Manual/external_content/dcp/Commands/0x0c/data/0x42.htm
+# TODO: That link is wrong, update once we have docs for it
+
+# Receiver ID - Only internal receivers are supported. See RECEIVER_ID_* enums for possible values
+uint8 receiver_id
+
+# Reset level - Some devices may not support certain ResetType options.. See RESET_TYPE_* for possible values
+uint8 reset_type
+
+# Possible values for receiver_id
+uint8 RECEIVER_ID_ALL             = 0 # Applies to all internal receivers
+uint8 RECEIVER_ID_INTERNAL_RECV_1 = 1 # Applies to only internal receiver 1
+uint8 RECEIVER_ID_INTERNAL_RECV_2 = 2 # Applies to only internal receiver 2
+uint8 RECEIVER_ID_USER_RECV_1     = 4
+uint8 RECEIVER_ID_USER_RECV_2     = 5
+
+# Possible values for reset_type
+uint8 RESET_TYPE_HARDWARE = 1 # Hardware-level reset of the GNSS receiver.
+uint8 RESET_TYPE_COLD     = 2 # Full GNSS receiver software reset.
+uint8 RESET_TYPE_HOT      = 3 # Only restarts receiver positioning engine.
+uint8 RESET_TYPE_WARM     = 4 # Restarts receiver positioning and clears satellite data (ephemeris/almanac).
+
+---

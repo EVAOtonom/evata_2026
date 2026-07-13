@@ -19,9 +19,8 @@
     use_pcd_map: true
     map_path: "/home/oguzcan/real_ws/map.pcd"
 
-    # İlk pose'u dışarıdan /initialpose veya GPS tabanlı node ile vereceksen false kalabilir.
-    # Ama localizer kendi başına ilk poz alsın istiyorsan true yapılır.
-    set_initial_pose: true
+    # External /initialpose or GPS-based initializer should provide the first pose.
+    set_initial_pose: false
 
     initial_pose_x: 0.0
     initial_pose_y: 0.0
@@ -31,13 +30,15 @@
     initial_pose_qz: 0.0
     initial_pose_qw: 1.0
 
+    # Local EKF odometry is used only as the NDT prediction / initial guess.
     use_odom: true
-    use_imu: true
+
+    # IMU is already used by LIO-SAM/local EKF; keep the localizer path simple.
+    use_imu: false
 
     enable_debug: true
 
-    # map->odom TF'yi bu paket yayınlayacaksa true yap.
-    # Başka node yayınlıyorsa false kalsın.
+    # IMPORTANT: global EKF is the sole map -> odom publisher.
     enable_map_odom_tf: false
 
     global_frame_id: map
