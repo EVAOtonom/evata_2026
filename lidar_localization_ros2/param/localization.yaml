@@ -12,7 +12,7 @@
 
     voxel_leaf_size: 0.2
 
-    scan_max_range: 150.0
+    scan_max_range: 80.0
     scan_min_range: 3.0
     scan_period: 0.1
 
@@ -20,7 +20,7 @@
     map_path: "/home/oguzcan/real_ws/map.pcd"
 
     # External /initialpose or GPS-based initializer should provide the first pose.
-    set_initial_pose: false
+    set_initial_pose: true
 
     initial_pose_x: 0.0
     initial_pose_y: 0.0

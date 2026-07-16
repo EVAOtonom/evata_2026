@@ -1,301 +1,250 @@
-from launch import LaunchDescription
-from launch.actions import (
-    DeclareLaunchArgument,
-    IncludeLaunchDescription,
-)
-from launch.launch_description_sources import (
-    PythonLaunchDescriptionSource,
-)
-from launch.substitutions import LaunchConfiguration
-
-from launch_ros.actions import Node
-
-from ament_index_python.packages import (
-    get_package_share_directory,
-)
-
 import os
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 import xacro
 
 
 def generate_launch_description():
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    src_dir = dir_path.split('/install')[0]
+    sdf_path = os.path.join(src_dir, "src", "reel_nav", 'final_deneme.sdf')
 
-    # ============================================================
-    # PATHS
-    # ============================================================
+    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
 
-    home_dir = os.path.expanduser('~')
-
-    src_dir = os.path.join(
-        home_dir,
-        'real_ws',
-        'src',
-        'reel_nav'
+    rviz_config_dir = os.path.join(
+        src_dir,
+        "src",
+        "reel_nav",
+        "config",
+        "nav2_evata_view.rviz"
     )
 
-    sdf_file = os.path.join(
-        src_dir,
-        'final_deneme.sdf'
+    nav2_launch_file_dir = os.path.join(
+        get_package_share_directory('nav2_bringup'),
+        'launch'
     )
 
-    rviz_config = os.path.join(
+    ekf_params_file = os.path.join(
         src_dir,
-        'config',
-        'nav2_evata_view.rviz'
+        "src",
+        "reel_nav",
+        "config",
+        "ekf.yaml"
     )
 
-    map_file = os.path.join(
-        src_dir,
+    map_dir = LaunchConfiguration(
         'map',
-        'harita.yaml'
-    )
-
-    nav2_params = os.path.join(
-        src_dir,
-        'config',
-        'test.yaml'
-    )
-
-    ekf_params = os.path.join(
-        src_dir,
-        'config',
-        'ekf.yaml'
-    )
-
-    lidar_localization_params = os.path.join(
-        src_dir,
-        'config',
-        'lidar_localization.yaml'
-    )
-
-    # ============================================================
-    # LAUNCH CONFIGURATIONS
-    # ============================================================
-
-    use_sim_time = LaunchConfiguration(
-        'use_sim_time'
-    )
-
-    # ============================================================
-    # ROBOT DESCRIPTION
-    # ============================================================
-
-    with open(sdf_file, 'r') as sdf_handle:
-        robot_description_document = xacro.parse(
-            sdf_handle
+        default=os.path.join(
+            src_dir,
+            "src",
+            "reel_nav",
+            'map',
+            'harita.yaml'
         )
-
-    xacro.process_doc(
-        robot_description_document
     )
 
-    robot_description = (
-        robot_description_document.toxml()
+    param_dir = LaunchConfiguration(
+        'params_file',
+        default=os.path.join(
+            src_dir,
+            "src",
+            "reel_nav",
+            "config",
+            'test.yaml'
+        )
     )
 
-    # ============================================================
-    # NAV2 BRINGUP
-    # ============================================================
-
-    nav2_launch = os.path.join(
-        get_package_share_directory(
-            'nav2_bringup'
-        ),
-        'launch',
-        'bringup_launch.py'
-    )
-
-    # ============================================================
-    # LAUNCH DESCRIPTION
-    # ============================================================
+    # Xacro dosyasını oku ve işle
+    doc = xacro.parse(open(sdf_path))
+    xacro.process_doc(doc)
 
     return LaunchDescription([
-
-        # --------------------------------------------------------
-        # ARGUMENTS
-        # --------------------------------------------------------
-
         DeclareLaunchArgument(
             'use_sim_time',
-            default_value='false'
+            default_value='false',
+            description='Use simulation clock if true'
+        ),
+        DeclareLaunchArgument(
+            'map',
+            default_value=os.path.join(
+                src_dir,
+                "src",
+                "reel_nav",
+                'map',
+                'harita.yaml'
+            ),
+            description='Full path to map file to load'
+        ),
+        DeclareLaunchArgument(
+            'params_file',
+            default_value=os.path.join(
+                src_dir,
+                "src",
+                "reel_nav",
+                "config",
+                'test.yaml'
+            ),
+            description='Full path to param file to load'
         ),
 
-        # --------------------------------------------------------
-        # ROBOT STATE PUBLISHER
-        # --------------------------------------------------------
+        # Sabit dönüşler
+        # Node(
+        #       package='tf2_ros',
+        #       executable='static_transform_publisher',
+        #       name='static_tf_map_to_odom',
+        #       output='log',
+        #       arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom']
+        # ),
 
-        Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            name='robot_state_publisher',
-            output='screen',
+        # Node(
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     name='static_tf_odom_to_base',
+        #     output='log',
+        #     arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_footprint']
+        # ),
 
-            parameters=[{
-                'robot_description': robot_description,
-                'use_sim_time': use_sim_time,
-            }],
-        ),
-
-        # --------------------------------------------------------
-        # JOINT STATE PUBLISHER
-        # --------------------------------------------------------
-
+        # joint_state_publisher
         Node(
             package='joint_state_publisher',
             executable='joint_state_publisher',
             name='joint_state_publisher',
             output='screen',
-
-            parameters=[{
-                'robot_description': robot_description,
-                'use_sim_time': use_sim_time,
-            }],
+            parameters=[{'use_sim_time': use_sim_time,
+                         'robot_description': doc.toxml()}]
         ),
+        
 
-        # --------------------------------------------------------
-        # WHEEL ENCODER ODOMETRY
-        # --------------------------------------------------------
-
+        # robot_state_publisher
         Node(
-            package='reel_evata',
-            executable='OdometerListener',
-            name='encoder_odom_publisher',
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            name='robot_state_publisher',
             output='screen',
-
+            parameters=[{'use_sim_time': use_sim_time,
+                         'robot_description': doc.toxml()}]
+        ),
+        
+        # PointCloud verisini LaserScan verisine çeviren node
+        Node(
+            package='pointcloud_to_laserscan',
+            executable='pointcloud_to_laserscan_node',
+            name='pointcloud_to_laserscan_nav',
+            output='screen',
             parameters=[{
                 'use_sim_time': use_sim_time,
+                'target_frame': 'base_footprint',
+                'transform_tolerance': 0.10,
+                'min_height': -0.05,
+                'max_height': 1.80,
+                'angle_min': -3.141592653589793,
+                'angle_max': 3.141592653589793,
+                'angle_increment': 0.008726646259972,
+                'scan_time': 0.105,
+                'range_min': 0.50,
+                'range_max': 12.0,
+                'use_inf': True
             }],
+            remappings=[
+                ('cloud_in', '/rslidar_points'),
+                ('scan', '/scan_nav')
+            ]
+        ),
+       	    
+        # Nav2 bringup launch dosyasını dahil et
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                [nav2_launch_file_dir, '/bringup_launch.py']
+            ),
+            launch_arguments={
+                'map': map_dir,
+                'use_sim_time': use_sim_time,
+                'params_file': param_dir,
+                'autostart': 'true'
+            }.items(),
         ),
 
-        # --------------------------------------------------------
-        # LOCAL EKF
-        #
-        # Inputs:
-        #   /lio_sam/mapping/odometry
-        #   /teker
-        #   /imu/data
-        #
-        # Output:
-        #   /odometry/filtered/local
-        #   odom -> base_footprint
-        # --------------------------------------------------------
-
+        # EKF localization node
         Node(
             package='robot_localization',
             executable='ekf_node',
             name='ekf_local',
             output='screen',
-
             parameters=[
-                ekf_params
+                ekf_params_file,
+                {'use_sim_time': use_sim_time}
             ],
-
             remappings=[
-                (
-                    'odometry/filtered',
-                    '/odometry/filtered/local'
-                ),
+                ('odometry/filtered', '/odom')
             ],
+            arguments=['--ros-args', '--log-level', 'info']
         ),
 
-        # --------------------------------------------------------
-        # NAVSAT TRANSFORM
-        #
-        # Inputs:
-        #   /imu/data
-        #   /gnss_1/llh_position
-        #   /odometry/filtered/local
-        #
-        # Outputs:
-        #   /odometry/gps
-        #   /gps/filtered
-        # --------------------------------------------------------
+	Node(
+	    package='robot_localization',
+	    executable='ekf_node',
+	    name='ekf_global',
+	    output='screen',
+            parameters=[
+                ekf_params_file,
+                {'use_sim_time': use_sim_time}
+            ],
+	    remappings=[
+		('odometry/filtered', '/odometry/global')
+	    ]
+	),
+        
 
+        # Navsat transform node
         Node(
             package='robot_localization',
             executable='navsat_transform_node',
             name='navsat_transform_node',
             output='screen',
-
             parameters=[
-                ekf_params
+                ekf_params_file,
+                {'use_sim_time': use_sim_time}
             ],
-
             remappings=[
-                (
-                    'imu',
-                    '/imu/data'
-                ),
-                (
-                    'gps/fix',
-                    '/gnss_1/llh_position'
-                ),
-                (
-                    'odometry/filtered',
-                    '/odometry/filtered/local'
-                ),
-                (
-                    'odometry/gps',
-                    '/odometry/gps'
-                ),
-                (
-                    'gps/filtered',
-                    '/gps/filtered'
-                ),
+                ('imu', '/imu/data'),
+                ('gps/fix', '/gnss_1/llh_position'),
+                ('odometry/filtered', '/odometry/global'),
+                ('odometry/gps', '/odometry/gps'),
+                ('gps/filtered', '/gps/filtered')
             ],
+            arguments=['--ros-args', '--log-level', 'info']
         ),
 
-        # --------------------------------------------------------
-        # GLOBAL EKF
-        #
-        # Inputs:
-        #   /odometry/filtered/local
-        #   /odometry/gps
-        #   /pcl_pose
-        #
-        # Outputs:
-        #   /odometry/filtered/global
-        #   map -> odom
-        # --------------------------------------------------------
-
-  
-        # --------------------------------------------------------
-        # NAV2 BRINGUP
-        #
-        # İlk kullandığın bringup_launch.py korunmuştur.
-        # --------------------------------------------------------
-
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                nav2_launch
-            ),
-
-            launch_arguments={
-                'map': map_file,
-                'params_file': nav2_params,
-                'use_sim_time': use_sim_time,
-                'autostart': 'true',
-            }.items(),
+        # Encoder odometriyi Odometry olarak yayımlayan node
+        Node(
+            package='reel_evata',
+            executable='OdometerListener',
+            name='encoder_odom_publisher',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time}]
         ),
 
-        # --------------------------------------------------------
-        # RVIZ
-        # --------------------------------------------------------
+        # # ZED Node (Örnek, kendi paketinize göre değiştirin)
+        # Node(
+        #     package='zed_wrapper',
+        #     executable='zed_node',
+        #     name='zed_node',
+        #     output='screen',
+        #     parameters=[{'use_sim_time': use_sim_time}]
+        # ),
 
+        # RViz
         Node(
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            output='screen',
-
-            arguments=[
-                '-d',
-                rviz_config,
-            ],
-
-            parameters=[{
-                'use_sim_time': use_sim_time,
-            }],
+            arguments=['-d', rviz_config_dir],
+            parameters=[{'use_sim_time': use_sim_time}],
+            output='screen'
         ),
-    ])
 
+    ])

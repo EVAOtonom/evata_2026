@@ -1,21 +1,127 @@
 ekf_local:
   ros__parameters:
-    use_sim_time: false
+
+    # ============================================================
+    # GENEL AYARLAR
+    # ============================================================
 
     frequency: 30.0
     sensor_timeout: 0.5
     two_d_mode: true
+
+    transform_time_offset: 0.0
+    transform_timeout: 0.0
+
+    print_diagnostics: true
+    debug: false
+
     publish_tf: true
     publish_acceleration: false
-    print_diagnostics: true
 
     map_frame: map
     odom_frame: odom
     base_link_frame: base_footprint
     world_frame: odom
 
-    # LIO-SAM: local pose (x, y, yaw)
-    odom0: /lio_sam/mapping/odometry
+
+    # ============================================================
+    # TEKER ODOMETRİSİ
+    # ============================================================
+
+    odom0: /teker
+
+    # /teker'den yalnızca x ve y.
+    odom0_config: [
+      true,  true,  false,
+      false, false, false,
+      false, false, false,
+      false, false, false,
+      false, false, false
+    ]
+
+    odom0_queue_size: 20
+    odom0_nodelay: false
+    odom0_differential: false
+    odom0_relative: false
+
+
+    # ============================================================
+    # YÜKSEK FREKANSLI LIO-SAM ODOMETRİSİ
+    # ============================================================
+
+    odom1: /lio_sam/odometry/imu
+
+    # LIO-SAM'den yalnızca yaw.
+    #
+    # /teker zaten x-y verdiği için LIO-SAM x-y değerleri
+    # ikinci kez eklenmiyor.
+    odom1_config: [
+      true, true, false,
+      false, false, true,
+      false, false, false,
+      false, false, false,
+      false, false, false
+    ]
+
+    odom1_queue_size: 100
+    odom1_nodelay: true
+    odom1_differential: false
+    odom1_relative: true
+
+    use_control: false
+
+# ================================================================
+# GLOBAL EKF
+# ================================================================
+
+ekf_global:
+  ros__parameters:
+
+    # ============================================================
+    # GENEL AYARLAR
+    # ============================================================
+
+    frequency: 30.0
+    sensor_timeout: 0.5
+    two_d_mode: true
+
+    transform_time_offset: 0.0
+    transform_timeout: 0.1
+
+    print_diagnostics: true
+    debug: false
+
+    publish_tf: true
+    publish_acceleration: false
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: map
+
+    # ============================================================
+    # GECİKMİŞ ÖLÇÜM FİLTRELEME
+    # ============================================================
+
+    # Eski zaman damgalı PCL ölçümü gelirse
+    # filtre geçmişe dönüp ölçümü uygular.
+    smooth_lagged_data: true
+
+    # PCL'nin maksimum gecikmesinden büyük olmalı.
+    # Örneğin PCL 300-500 ms gecikiyorsa 1.0 uygundur.
+    history_length: 10.0
+
+    # Gecikmiş ölçüm işlendiğinde sonucu güncel zamana
+    # kadar tekrar tahmin eder.
+    predict_to_current_time: true
+
+    # ============================================================
+    # LOCAL ODOMETRİ
+    # ============================================================
+
+    odom0: /odom
+
+    # /odom'dan x, y ve yaw değişimi
     odom0_config: [
       true,  true,  false,
       false, false, true,
@@ -23,59 +129,19 @@ ekf_local:
       false, false, false,
       false, false, false
     ]
-    odom0_differential: false
+
+    odom0_queue_size: 50
+    odom0_nodelay: false
+    odom0_differential: true
     odom0_relative: false
-    odom0_queue_size: 10
-    odom0_pose_rejection_threshold: 5.0
 
-    # Wheel encoder: only forward/backward velocity vx
-    odom1: /teker
-    odom1_config: [
-      false, false, false,
-      false, false, false,
-      true,  false, false,
-      false, false, false,
-      false, false, false
-    ]
-    odom1_differential: false
-    odom1_relative: false
-    odom1_queue_size: 10
-    odom1_twist_rejection_threshold: 1.0
+    # ============================================================
+    # PCL LOKALİZASYON POZU
+    # ============================================================
 
-
-ekf_global:
-  ros__parameters:
-    use_sim_time: false
-
-    frequency: 30.0
-    sensor_timeout: 0.5
-    two_d_mode: true
-    publish_tf: false
-    publish_acceleration: false
-    print_diagnostics: true
-
-    map_frame: map
-    odom_frame: odom
-    base_link_frame: base_footprint
-    world_frame: map
-
-
-    # navsat_transform output: global GPS position x, y
-    odom0: /odometry/gps
-    odom0_config: [
-      true,  true,  false,
-      false, false, false,
-      false, false, false,
-      false, false, false,
-      false, false, false
-    ]
-    odom0_differential: false
-    odom0_relative: false
-    odom0_queue_size: 10
-    odom0_pose_rejection_threshold: 5.0
-
-    # Lidar localization global pose: x, y, yaw
     pose0: /pcl_pose
+
+    # PCL'den mutlak map x, y ve yaw
     pose0_config: [
       true,  true,  false,
       false, false, true,
@@ -83,14 +149,22 @@ ekf_global:
       false, false, false,
       false, false, false
     ]
+
+    pose0_queue_size: 50
+    pose0_nodelay: false
     pose0_differential: false
     pose0_relative: false
-    pose0_queue_size: 10
-    pose0_rejection_threshold: 2.0
 
+    use_control: false
+
+
+# ================================================================
+# NAVSAT TRANSFORM
+# ================================================================
 
 navsat_transform_node:
   ros__parameters:
+
     use_sim_time: false
 
     frequency: 10.0
@@ -100,11 +174,13 @@ navsat_transform_node:
     yaw_offset: 0.0
 
     zero_altitude: true
+
     broadcast_utm_transform: false
     broadcast_utm_transform_as_parent_frame: false
+
     publish_filtered_gps: true
 
-    # Heading comes from /imu/data, not from filtered odometry.
+    # Heading /imu/data topic'inden alınır.
     use_odometry_yaw: false
 
     wait_for_datum: true

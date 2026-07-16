@@ -114,7 +114,7 @@ target_frame_id : "base_link"
 
 # Static transform between mount_frame_id and frame_id.
 # Note: It is recommended to define this in a urdf file if you are building a robot, or are able to modify the robot's description.
-publish_mount_to_frame_id_transform  : True
+publish_mount_to_frame_id_transform  : False
 mount_to_frame_id_transform          : [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0] # [ x, y, z, qi, qj, qk, qw ]
 
 # Controls if the driver outputs data with-respect-to ENU frame
@@ -290,7 +290,7 @@ filter_pps_source : 1
 # Note: This can cause strange behavior when also using the ROS transform tree.
 #       It is recommended to not use this if you want to use the ROS transform tree unless you really know what you are doing
 filter_sensor2vehicle_frame_selector : 1
-filter_sensor2vehicle_frame_transformation_euler      : [0.0, 0.0, 0.0]
+filter_sensor2vehicle_frame_transformation_euler      : [3.141592653589793, 0.0, 0.0]
 filter_sensor2vehicle_frame_transformation_matrix     : [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
 filter_sensor2vehicle_frame_transformation_quaternion : [0.0, 0.0, 0.0, 1.0]
 
@@ -338,7 +338,7 @@ filter_speed_lever_arm : [0.0, 0.5, -1.0]
 filter_heading_source : 1
 
 # (GX5 and previous,-45 models only) Dynamics Mode 1 = Portable (default), 2 = Automotive, 3 = Airborne (<2Gs), 4 = Airborne High G (<4Gs)
-filter_dynamics_mode : 1
+filter_dynamics_mode : 2
 
 # (GQ7 only) GNSS Aiding Source Control
 # 1 = All internal receivers

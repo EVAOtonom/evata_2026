@@ -19,7 +19,7 @@ lidar:
 
 
       min_distance: 3.0            #  Minimum distance of point cloud
-      max_distance: 150      #  Maximum distance of point cloud
+      max_distance: 80      #  Maximum distance of point cloud
       use_lidar_clock: false        #  true--Use the lidar clock as the message timestamp
                                    #  false-- Use the system clock as the timestamp
       dense_points: false          #  true: discard NAN points; false: reserve NAN points
