@@ -37,7 +37,16 @@ class PID:
         derivative = (error - self.prev_error) / dt
         self.prev_error = error
 
-        output = (self.kp * error) + (self.ki * self.integral) + (self.kd * derivative)
+        # Hata sıfırdan büyükse (hızlanmamız gerekiyorsa), out_min'i taban (feedforward) güç olarak kullan.
+        # Böylece ufak PID çıkışları ölü bölgede (28 altında) eriyip gitmez.
+        if error > 0:
+            base_power = self.out_min
+        else:
+            base_power = 0.0
+
+        pid_output = (self.kp * error) + (self.ki * self.integral) + (self.kd * derivative)
+        output = base_power + pid_output
+        
         return max(self.out_min, min(self.out_max, output))
 
 
@@ -126,56 +135,46 @@ class CmdVelSubscriber(Node):
         super().__init__('cmd_vel_subscriber')
 
         # ==================== PARAMETRELER (tune edilebilir) ====================
-        # Motor sadece 28-33 aralığında anlamlı çalışıyor (28 altı dönmüyor, 33 üstü gereksiz/riskli)
         self.declare_parameter('max_motor_power', 33)
-        self.declare_parameter('min_motor_power', 30)
-        self.declare_parameter('max_velocity', 1.5)
+        self.declare_parameter('min_motor_power', 28)
+        self.declare_parameter('max_velocity', 0.8)
 
-        # Hedef hız navigasyondan gelen linear.x'e bağlı: target = linear_x * velocity_scale
-        # Genel hızı arttırıp azaltmak için sadece bu çarpanı değiştirmen yeterli.
-        self.declare_parameter('velocity_scale', 1.2)
-
-        # Hız PID katsayıları - çıkış aralığı dar (28-33) olduğu için küçük kazançlar yeterli
         self.declare_parameter('vel_kp', 10.0)
         self.declare_parameter('vel_ki', 6.0)
         self.declare_parameter('vel_kd', 0.5)
 
-        # Hız setpoint rampası (ivme limiti, m/s^2) - "gaza aniden basma" hissini ortadan kaldırır.
-        # max_decel, max_accel'den büyük tutuldu: dönüşe girerken hızlı yavaşlayabilsin,
-        # ama hızlanma her zaman kontrollü/yumuşak olsun.
         self.declare_parameter('max_accel', 0.45)   # m/s^2
         self.declare_parameter('max_decel', 0.9)    # m/s^2
+        self.declare_parameter('overspeed_brake_margin', 0.5)  # m/s
 
-        # Direksiyon limitleri
         self.declare_parameter('steer_max_left', 160)
         self.declare_parameter('steer_max_right', -160)
         self.declare_parameter('wheelbase', 1.75)
         self.declare_parameter('max_left_deg', 30.0)
         self.declare_parameter('max_right_deg', -33.0)
 
-        # Filtre parametreleri
-        self.declare_parameter('velocity_filter_alpha', 0.3)   # odometri hız filtresi
-        self.declare_parameter('angular_filter_alpha', 0.35)   # gelen angular_z filtresi
-        self.declare_parameter('steering_filter_alpha', 0.35)  # çıkış direksiyon filtresi
-        self.declare_parameter('steering_rate_max', 400.0)     # direksiyon birimi/saniye (yumuşak dönüş)
+        self.declare_parameter('velocity_filter_alpha', 0.3)
+        self.declare_parameter('angular_filter_alpha', 0.15)
+        self.declare_parameter('steering_filter_alpha', 0.12)
+        self.declare_parameter('steering_rate_max', 180.0)
 
-        # === Eğrilik-bazlı hız sınırlama (curvature-based speed limiting) ===
-        # Dönüş ne kadar keskinse (direksiyon açısı max limite ne kadar yakınsa),
-        # hedef hız o kadar düşürülür - "tekeri kırıp gaza basma" davranışını engeller.
+        self.declare_parameter('angular_deadband', 0.015)       
+        self.declare_parameter('angular_max_clip', 0.45) 
+        
+        self.declare_parameter('steering_ref_velocity_min', 0.25)
+
         self.declare_parameter('curvature_speed_limit_enable', True)
-        self.declare_parameter('curvature_min_speed_fraction', 0.35)  # tam kilitte izin verilen hız oranı
-        self.declare_parameter('curvature_free_zone', 0.15)           # bu oranın altında hiç yavaşlama yok
-
-        # Öngörü (prediction) parametreleri
-        self.declare_parameter('curvature_lookahead_time', 0.35)  # saniye, ne kadar ileriye bakılsın
-        self.declare_parameter('curvature_window_size', 6)         # kaç örnek üzerinden trend hesaplansın
+        self.declare_parameter('curvature_min_speed_fraction', 0.80) # Tam kilit dönüşlerde bile hızı maksimum %20 kes (hedefin %80'i kalır)
+        self.declare_parameter('curvature_free_zone', 0.25) 
+        
+        self.declare_parameter('curvature_lookahead_time', 0.35)
+        self.declare_parameter('curvature_window_size', 6)
 
         self._load_params()
 
-        # Direksiyon Int16 (-160..160 aralığı Int8'e sığmıyor)
         self.steering_angle_pub = self.create_publisher(Int16, '/stm/steering_angle', 10)
         self.motor_power_pub = self.create_publisher(Int8, '/stm/motor_power', 10)
-        #self.brake_pub = self.create_publisher(Bool, '/stm/brake', 10)
+        self.brake_pub = self.create_publisher(Bool, '/stm/brake', 10)
         self.reverse_pub = self.create_publisher(Bool, '/stm/reverse_command', 10)
 
         self.cmd_vel_sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
@@ -184,9 +183,9 @@ class CmdVelSubscriber(Node):
         self.sign_sub = self.create_subscription(String, '/detected_signs', self.sign_callback, 10)
 
         self.current_velocity_raw = 0.0
-        self.current_velocity = 0.0       # filtrelenmiş anlık hız
-        self.nav_target_velocity = 0.0    # navigasyondan gelen ham istek (ölçeklenmiş, eğrilik sınırı UYGULANMADAN)
-        self.target_velocity = 0.0        # eğrilik-sınırlı, ivme rampasından geçmiş NİHAİ hedef
+        self.current_velocity = 0.0
+        self.nav_target_velocity = 0.0
+        self.target_velocity = 0.0
 
         self.last_odom = None
         self.last_odom_time = None
@@ -196,12 +195,11 @@ class CmdVelSubscriber(Node):
 
         self.last_motor_power = 0
         self.last_brake = False
-        self.last_steering_deg = 0        # STM'ye gönderilecek final (-160..160)
+        self.last_steering_deg = 0
 
         self.angular_z_filtered = 0.0
         self.last_cmd_time = None
 
-        # Filtre / kontrolcü nesneleri
         self.vel_filter = EMAFilter(self.velocity_filter_alpha)
         self.angular_filter = EMAFilter(self.angular_filter_alpha)
         self.steering_filter = EMAFilter(self.steering_filter_alpha)
@@ -212,7 +210,6 @@ class CmdVelSubscriber(Node):
             lookahead_time=self.curvature_lookahead_time
         )
 
-        # PID çıkışı doğrudan [min_motor_power, max_motor_power] = [28, 33] aralığında üretiliyor.
         self.velocity_pid = PID(
             kp=self.vel_kp, ki=self.vel_ki, kd=self.vel_kd,
             out_min=float(self.min_motor_power),
@@ -221,11 +218,10 @@ class CmdVelSubscriber(Node):
         )
         self.last_pid_time = None
 
-        # Timer ile sabit frekansta yayın (50 Hz)
         self.timer = self.create_timer(0.02, self.timer_callback)
 
         self.get_logger().info(
-            'CmdVel Node başlatıldı (eğrilik-bazlı hız sınırlama + öngörü + ivme rampası + PID).'
+            'CmdVel Node başlatıldı (Hız kesme limiti %80\'e çekildi).'
         )
 
     def _load_params(self):
@@ -233,7 +229,6 @@ class CmdVelSubscriber(Node):
         self.max_motor_power = gp('max_motor_power')
         self.min_motor_power = gp('min_motor_power')
         self.max_velocity = gp('max_velocity')
-        self.velocity_scale = gp('velocity_scale')
 
         self.vel_kp = gp('vel_kp')
         self.vel_ki = gp('vel_ki')
@@ -241,6 +236,7 @@ class CmdVelSubscriber(Node):
 
         self.max_accel = gp('max_accel')
         self.max_decel = gp('max_decel')
+        self.overspeed_brake_margin = gp('overspeed_brake_margin')
 
         self.STEER_MAX_LEFT = gp('steer_max_left')
         self.STEER_MAX_RIGHT = gp('steer_max_right')
@@ -248,7 +244,6 @@ class CmdVelSubscriber(Node):
         self.MAX_LEFT_DEG = gp('max_left_deg')
         self.MAX_RIGHT_DEG = gp('max_right_deg')
 
-        # Fiziksel dereceyi -160..160 aralığına ölçekleyen gain (160/31.5≈5.08)
         avg_deg = (abs(self.MAX_LEFT_DEG) + abs(self.MAX_RIGHT_DEG)) / 2.0
         self.steering_gain = self.STEER_MAX_LEFT / avg_deg
 
@@ -256,6 +251,10 @@ class CmdVelSubscriber(Node):
         self.angular_filter_alpha = gp('angular_filter_alpha')
         self.steering_filter_alpha = gp('steering_filter_alpha')
         self.steering_rate_max = gp('steering_rate_max')
+
+        self.angular_deadband = gp('angular_deadband')
+        self.angular_max_clip = gp('angular_max_clip')
+        self.steering_ref_velocity_min = gp('steering_ref_velocity_min')
 
         self.curvature_speed_limit_enable = gp('curvature_speed_limit_enable')
         self.curvature_min_speed_fraction = gp('curvature_min_speed_fraction')
@@ -291,7 +290,6 @@ class CmdVelSubscriber(Node):
         velocity_mps = distance_m / delta_t
 
         self.current_velocity_raw = velocity_mps
-        # Gürültülü odometri türevini yumuşat
         self.current_velocity = self.vel_filter.update(velocity_mps)
 
         self.last_odom = current_odom
@@ -322,56 +320,46 @@ class CmdVelSubscriber(Node):
         linear_x = msg.linear.x
         if linear_x <= 0:
             self.nav_target_velocity = 0.0
+            self.target_velocity = 0.0
             return
 
-        # Navigasyonun istediği ham hız, sadece çarpanla ölçeklenip tavana kırpılıyor.
-        # ros2 param set /cmd_vel_subscriber velocity_scale 1.3   -> genel hızı arttır
-        self.nav_target_velocity = min(linear_x * self.velocity_scale, self.max_velocity)
+        self.nav_target_velocity = min(linear_x, self.max_velocity)
 
-        # Gelen angular_z'yi filtrele - direksiyon titremesinin ana kaynağı budur
-        raw_angular = msg.angular.z * 1.25
+        raw_angular = msg.angular.z * 1.6
+
+        if abs(raw_angular) < self.angular_deadband:
+            raw_angular = 0.0
+
+        raw_angular = max(-self.angular_max_clip, min(self.angular_max_clip, raw_angular))
         self.angular_z_filtered = self.angular_filter.update(raw_angular)
 
-        # === Direksiyon açısı hesabı (bicycle model) ===
-        # Bölen olarak ANLIK (filtrelenmiş) hız kullanılıyor: araç henüz yavaşken
-        # aynı açısal hız için daha büyük direksiyon açısı üretilir, hızlandıkça
-        # açı doğal olarak küçülüp hıza "ayak uydurur". Bölme patlamasına karşı taban var.
-        effective_velocity = max(self.current_velocity, 0.2)
+        effective_velocity = max(self.nav_target_velocity, self.steering_ref_velocity_min)
         steering_rad = math.atan((self.WHEELBASE * self.angular_z_filtered) / effective_velocity)
 
         angle_val = math.degrees(steering_rad) * self.steering_gain
         steering_val = max(self.STEER_MAX_RIGHT, min(self.STEER_MAX_LEFT, angle_val)) * -1
 
-        # Çıkışı EMA ile filtrele
         steering_val = self.steering_filter.update(steering_val)
-
-        # Zaman-bazlı rate-limit: direksiyon saniyede en fazla steering_rate_max kadar değişsin
         self.last_steering_deg = int(round(self.steering_rate_limiter.update(steering_val, dt)))
 
-        # === Eğrilik-bazlı hız sınırlama + öngörü ===
         if self.curvature_speed_limit_enable:
             max_steer_mag = max(abs(self.STEER_MAX_LEFT), abs(self.STEER_MAX_RIGHT))
             curvature_fraction = min(1.0, abs(self.last_steering_deg) / max_steer_mag)
 
-            # Son örneklerin trendine bakarak yakın gelecekteki eğriliği tahmin et
             predicted_fraction = self.curvature_predictor.update(curvature_fraction, now)
 
-            # curvature_free_zone altında hiç kısıtlama yok (düz yol / hafif kavis)
             if predicted_fraction <= self.curvature_free_zone:
                 effective_curv = 0.0
             else:
-                # free_zone ile 1.0 arasını yeniden 0..1'e ölçekle
                 effective_curv = (predicted_fraction - self.curvature_free_zone) / (
                     1.0 - self.curvature_free_zone
                 )
                 effective_curv = max(0.0, min(1.0, effective_curv))
 
-            # Düz yolda %100 hız, tam kilitte curvature_min_speed_fraction kadar hız
             speed_cap_fraction = 1.0 - effective_curv * (1.0 - self.curvature_min_speed_fraction)
         else:
             speed_cap_fraction = 1.0
 
-        # Bu, ivme rampasının hedefleyeceği NİHAİ (eğrilik-sınırlı) hız
         self.target_velocity = self.nav_target_velocity * speed_cap_fraction
 
     # ==================== Ana kontrol döngüsü (50 Hz) ====================
@@ -382,7 +370,7 @@ class CmdVelSubscriber(Node):
 
         if self.obstacle_detected:
             self.motor_power_pub.publish(Int8(data=0))
-            #self.brake_pub.publish(Bool(data=True))
+            self.brake_pub.publish(Bool(data=True))
             self.steering_angle_pub.publish(Int16(data=0))
             self.velocity_pid.reset()
             self.velocity_ramp.reset(0.0)
@@ -393,7 +381,6 @@ class CmdVelSubscriber(Node):
         dt = 0.02 if self.last_pid_time is None else max(1e-3, now - self.last_pid_time)
         self.last_pid_time = now
 
-        # Hedef hızı (eğrilik-sınırlı) ivme limitiyle yumuşat - ani "gaza basma/kesme" olmasın
         ramped_target = self.velocity_ramp.update(self.target_velocity, dt)
 
         if ramped_target <= 0.02:
@@ -403,10 +390,13 @@ class CmdVelSubscriber(Node):
         else:
             error = ramped_target - self.current_velocity
 
-            if self.current_velocity >= ramped_target + 1.0:
-                # Beklenmedik şekilde çok hızlıyız: motoru kes, PID'i sıfırla
+            if self.current_velocity >= ramped_target + self.overspeed_brake_margin:
                 self.last_motor_power = 0
                 self.last_brake = True
+                self.velocity_pid.reset()
+            elif error <= 0:
+                self.last_motor_power = 0
+                self.last_brake = False
                 self.velocity_pid.reset()
             else:
                 motor_power = self.velocity_pid.compute(error, dt)
@@ -414,7 +404,7 @@ class CmdVelSubscriber(Node):
                 self.last_brake = False
 
         self.motor_power_pub.publish(Int8(data=self.last_motor_power))
-        #self.brake_pub.publish(Bool(data=self.last_brake))
+        self.brake_pub.publish(Bool(data=self.last_brake))
         self.steering_angle_pub.publish(Int16(data=self.last_steering_deg))
 
         self.get_logger().info(

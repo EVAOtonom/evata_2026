@@ -119,7 +119,7 @@ controller_server:
       time_steps: 50
       model_dt: 0.05
       batch_size: 1000
-      vx_max: 0.9
+      vx_max: 0.5
       vx_min: -0.2
       vx_std: 0.2
       wz_std: 0.15
@@ -130,7 +130,7 @@ controller_server:
       motion_model: Ackermann
       visualize: false
       AckermannConstraints:
-        min_turning_r: 1.5
+        min_turning_r: 3.2
       critics:
       - ConstraintCritic
       - CostCritic
@@ -301,7 +301,7 @@ planner_server:
       analytic_expansion_max_length: 3.0
       analytic_expansion_max_cost: 200.0
       analytic_expansion_max_cost_override: false
-      minimum_turning_radius: 1.5
+      minimum_turning_radius: 3.2
       reverse_penalty: 31.0
       change_penalty: 0.0
       non_straight_penalty: 1.0

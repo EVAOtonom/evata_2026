@@ -128,7 +128,7 @@
     # CPU
     # =========================
 
-    numberOfCores: 8
+    numberOfCores: 10
 
     # Her gelen LiDAR taramasını işle.
     # LiDAR 10 Hz olduğu için mapping odometry yine en fazla 10 Hz olur.

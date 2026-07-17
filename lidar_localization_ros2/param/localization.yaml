@@ -17,7 +17,7 @@
     scan_period: 0.1
 
     use_pcd_map: true
-    map_path: "/home/oguzcan/real_ws/map.pcd"
+    map_path: "/home/otonom/real_ws/map.pcd"
 
     # External /initialpose or GPS-based initializer should provide the first pose.
     set_initial_pose: true
