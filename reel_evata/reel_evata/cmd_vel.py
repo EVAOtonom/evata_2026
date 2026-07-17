@@ -38,7 +38,7 @@ class PID:
         self.prev_error = error
 
         # Hata sıfırdan büyükse (hızlanmamız gerekiyorsa), out_min'i taban (feedforward) güç olarak kullan.
-        # Böylece ufak PID çıkışları ölü bölgede (28 altında) eriyip gitmez.
+        # Böylece ufak PID çıkışları ölü bölgede (min_motor_power altında) eriyip gitmez.
         if error > 0:
             base_power = self.out_min
         else:
@@ -46,7 +46,7 @@ class PID:
 
         pid_output = (self.kp * error) + (self.ki * self.integral) + (self.kd * derivative)
         output = base_power + pid_output
-        
+
         return max(self.out_min, min(self.out_max, output))
 
 
@@ -71,7 +71,7 @@ class EMAFilter:
 class RateLimiter:
     """
     Bir değerin zamana göre (birim/saniye cinsinden) ne kadar hızlı değişebileceğini sınırlar.
-    Hem hız setpoint'ini (ivme limiti) hem direksiyon komutunu yumuşatmak için kullanılır.
+    Hız setpoint'ini (ivme limiti) yumuşatmak için kullanılır.
     Yükselme ve düşme için ayrı oranlar tanımlanabilir (örn. yavaşlama, hızlanmadan daha hızlı olabilir).
     """
 
@@ -102,7 +102,8 @@ class CurvaturePredictor:
     Son birkaç direksiyon/eğrilik örneğinin trendine (eğim) bakarak yakın gelecekteki
     eğriliği tahmin eder. Path planner (Hybrid A* / Dijkstra) çıktısından türeyen
     cmd_vel komutları zaman içinde geldiği için, "dönüş keskinleşiyor" trendini
-    yakalayıp hız düşürmeyi ÖNCEDEN başlatmamızı sağlar (sadece anlık tepki yerine).
+    yakalayıp güç artırmayı (ya da yavaşlamayı) ÖNCEDEN başlatmamızı sağlar
+    (sadece anlık tepki yerine).
     """
 
     def __init__(self, window_size=6, lookahead_time=0.35):
@@ -125,8 +126,8 @@ class CurvaturePredictor:
         predicted = c1 + slope * self.lookahead_time
         predicted = max(0.0, min(1.0, predicted))
 
-        # Trend artıyorsa (dönüş keskinleşiyor) tahmini değeri, azalıyorsa
-        # güncel değeri baz al - erken yavaşla ama erken hızlanma (henüz düzelmeden).
+        # Trend artıyorsa (dönüş keskinleşiyor) tahmini değeri baz al ki güç desteği
+        # erken devreye girsin; trend azalıyorsa güncel değeri kullan.
         return max(curvature_fraction, predicted)
 
 
@@ -135,6 +136,7 @@ class CmdVelSubscriber(Node):
         super().__init__('cmd_vel_subscriber')
 
         # ==================== PARAMETRELER (tune edilebilir) ====================
+        # Motor gücü: normal (düz gidiş) tavan ve taban değerleri
         self.declare_parameter('max_motor_power', 33)
         self.declare_parameter('min_motor_power', 28)
         self.declare_parameter('max_velocity', 0.8)
@@ -147,28 +149,39 @@ class CmdVelSubscriber(Node):
         self.declare_parameter('max_decel', 0.9)    # m/s^2
         self.declare_parameter('overspeed_brake_margin', 0.5)  # m/s
 
+        # Direksiyon fiziksel/aktüatör limitleri (STM tarafında gerçek aralık: -160..160)
         self.declare_parameter('steer_max_left', 160)
         self.declare_parameter('steer_max_right', -160)
-        self.declare_parameter('wheelbase', 1.75)
-        self.declare_parameter('max_left_deg', 30.0)
-        self.declare_parameter('max_right_deg', -33.0)
 
-        self.declare_parameter('velocity_filter_alpha', 0.3)
-        self.declare_parameter('angular_filter_alpha', 0.15)
-        self.declare_parameter('steering_filter_alpha', 0.12)
-        self.declare_parameter('steering_rate_max', 180.0)
+        # angular.z, nav2/velocity_smoother tarafında zaten [-0.35, 0.35] rad/s ile
+        # sınırlanıyor (test.yaml -> velocity_smoother.max_velocity[2] / min_velocity[2]).
+        # Direksiyon açısı artık Ackermann/atan geometrisi yerine BUNA doğrudan orantılı
+        # hesaplanıyor: angular.z 0..0.35 -> steering 0..160 (aynı oranda ara değerler).
+        self.declare_parameter('angular_z_max', 0.35)
+        self.declare_parameter('angular_z_min', -0.35)
 
-        self.declare_parameter('angular_deadband', 0.015)       
-        self.declare_parameter('angular_max_clip', 0.45) 
-        
-        self.declare_parameter('steering_ref_velocity_min', 0.25)
+        # angular.z için ölü bölge (gürültüyü at). Nav2 verisi zaten filtrelenmiş
+        # geldiği için burada ayrıca EMA/rate-limit smoothing UYGULANMIYOR - tekerlek
+        # mekanik olarak da zaten hızlı dönemediğinden sert komutlar sorun değil.
+        self.declare_parameter('angular_deadband', 0.015)
 
-        self.declare_parameter('curvature_speed_limit_enable', True)
-        self.declare_parameter('curvature_min_speed_fraction', 0.80) # Tam kilit dönüşlerde bile hızı maksimum %20 kes (hedefin %80'i kalır)
-        self.declare_parameter('curvature_free_zone', 0.25) 
-        
+        # ---- Dönüşte GÜÇ ARTIŞI (önceden hız kısma vardı, artık güç ekleniyor) ----
+        # Mantık: dönerken tekerlek/aktarma sürtünmesi arttığı için araç daha fazla
+        # güç istiyor. Bu yüzden hızı kısmak yerine, direksiyon açısı büyüdükçe
+        # motor gücüne ekstra pay ekliyoruz.
+        self.declare_parameter('curvature_power_boost_enable', True)
+        self.declare_parameter('curvature_free_zone', 0.25)          # Bu oranın altındaki direksiyon açılarında ekstra güç yok
+        self.declare_parameter('turn_power_boost_max', 12.0)          # Tam kilit dönüşte eklenecek maksimum ekstra güç (power birimi)
         self.declare_parameter('curvature_lookahead_time', 0.35)
         self.declare_parameter('curvature_window_size', 6)
+
+        # ---- Kalkış / Stall koruması ----
+        # Hedef hız > 0 olduğu halde araç gerçekte hareket etmiyorsa (statik sürtünmeyi
+        # yenemiyorsa), motor gücü SABİT KALMAMALI - hareket algılanana kadar sürekli
+        # artmalı. stall_boost_rate: saniyede eklenen ekstra güç birimi.
+        self.declare_parameter('stall_velocity_threshold', 0.05)      # Bu hızın altı "hareket etmiyor" sayılır (m/s)
+        self.declare_parameter('stall_boost_rate', 8.0)                # power birimi / saniye
+        self.declare_parameter('absolute_max_motor_power', 45)         # Turn-boost + stall-boost dahil mutlak güvenlik tavanı
 
         self._load_params()
 
@@ -198,12 +211,13 @@ class CmdVelSubscriber(Node):
         self.last_steering_deg = 0
 
         self.angular_z_filtered = 0.0
+        self.curvature_boost_fraction = 0.0   # 0..1, dönüş şiddeti (güç artışı için)
         self.last_cmd_time = None
 
-        self.vel_filter = EMAFilter(self.velocity_filter_alpha)
-        self.angular_filter = EMAFilter(self.angular_filter_alpha)
-        self.steering_filter = EMAFilter(self.steering_filter_alpha)
-        self.steering_rate_limiter = RateLimiter(self.steering_rate_max, self.steering_rate_max)
+        # Stall (kalkamama) takibi
+        self.stall_timer = 0.0
+
+        self.vel_filter = EMAFilter(self.velocity_filter_alpha) if hasattr(self, 'velocity_filter_alpha') else EMAFilter(0.3)
         self.velocity_ramp = RateLimiter(self.max_accel, self.max_decel)
         self.curvature_predictor = CurvaturePredictor(
             window_size=self.curvature_window_size,
@@ -221,7 +235,8 @@ class CmdVelSubscriber(Node):
         self.timer = self.create_timer(0.02, self.timer_callback)
 
         self.get_logger().info(
-            'CmdVel Node başlatıldı (Hız kesme limiti %80\'e çekildi).'
+            'CmdVel Node başlatıldı (Direksiyon: doğrudan orantılı eşleme, '
+            'Dönüşte hız kısma yerine güç artışı, Stall güç rampası aktif).'
         )
 
     def _load_params(self):
@@ -240,27 +255,25 @@ class CmdVelSubscriber(Node):
 
         self.STEER_MAX_LEFT = gp('steer_max_left')
         self.STEER_MAX_RIGHT = gp('steer_max_right')
-        self.WHEELBASE = gp('wheelbase')
-        self.MAX_LEFT_DEG = gp('max_left_deg')
-        self.MAX_RIGHT_DEG = gp('max_right_deg')
+        self.max_steer_mag = max(abs(self.STEER_MAX_LEFT), abs(self.STEER_MAX_RIGHT))
 
-        avg_deg = (abs(self.MAX_LEFT_DEG) + abs(self.MAX_RIGHT_DEG)) / 2.0
-        self.steering_gain = self.STEER_MAX_LEFT / avg_deg
-
-        self.velocity_filter_alpha = gp('velocity_filter_alpha')
-        self.angular_filter_alpha = gp('angular_filter_alpha')
-        self.steering_filter_alpha = gp('steering_filter_alpha')
-        self.steering_rate_max = gp('steering_rate_max')
+        self.angular_z_max = gp('angular_z_max')
+        self.angular_z_min = gp('angular_z_min')
+        self.angular_z_mag = max(abs(self.angular_z_max), abs(self.angular_z_min))
 
         self.angular_deadband = gp('angular_deadband')
-        self.angular_max_clip = gp('angular_max_clip')
-        self.steering_ref_velocity_min = gp('steering_ref_velocity_min')
 
-        self.curvature_speed_limit_enable = gp('curvature_speed_limit_enable')
-        self.curvature_min_speed_fraction = gp('curvature_min_speed_fraction')
+        self.velocity_filter_alpha = 0.3  # sadece odom hız tahmini için (steering'de artık kullanılmıyor)
+
+        self.curvature_power_boost_enable = gp('curvature_power_boost_enable')
         self.curvature_free_zone = gp('curvature_free_zone')
+        self.turn_power_boost_max = gp('turn_power_boost_max')
         self.curvature_lookahead_time = gp('curvature_lookahead_time')
         self.curvature_window_size = gp('curvature_window_size')
+
+        self.stall_velocity_threshold = gp('stall_velocity_threshold')
+        self.stall_boost_rate = gp('stall_boost_rate')
+        self.absolute_max_motor_power = gp('absolute_max_motor_power')
 
     # ==================== Callback'ler ====================
 
@@ -321,31 +334,36 @@ class CmdVelSubscriber(Node):
         if linear_x <= 0:
             self.nav_target_velocity = 0.0
             self.target_velocity = 0.0
+            self.last_steering_deg = 0
+            self.curvature_boost_fraction = 0.0
             return
 
         self.nav_target_velocity = min(linear_x, self.max_velocity)
+        # Artık dönüşte hız KISILMIYOR - hedef hız direkt nav2'nin istediği değer.
+        self.target_velocity = self.nav_target_velocity
 
-        raw_angular = msg.angular.z * 1.6
+        raw_angular = msg.angular.z
 
         if abs(raw_angular) < self.angular_deadband:
             raw_angular = 0.0
 
-        raw_angular = max(-self.angular_max_clip, min(self.angular_max_clip, raw_angular))
-        self.angular_z_filtered = self.angular_filter.update(raw_angular)
+        # Nav2 / velocity_smoother zaten [-0.35, 0.35] aralığında sınırlıyor;
+        # yine de güvenlik için clip'liyoruz. Ekstra EMA smoothing YOK.
+        raw_angular = max(self.angular_z_min, min(self.angular_z_max, raw_angular))
+        self.angular_z_filtered = raw_angular
 
-        effective_velocity = max(self.nav_target_velocity, self.steering_ref_velocity_min)
-        steering_rad = math.atan((self.WHEELBASE * self.angular_z_filtered) / effective_velocity)
+        # ---- Direksiyon: doğrudan orantılı eşleme (Ackermann/atan YOK) ----
+        # angular.z: 0 .. angular_z_max  ->  steering: 0 .. steer_max_left (aynı oranda)
+        # angular.z: 0 .. angular_z_min  ->  steering: 0 .. steer_max_right (aynı oranda)
+        ratio = self.angular_z_filtered / self.angular_z_mag  # -1..1
+        raw_steer_val = -ratio * self.max_steer_mag  # işaret kuralı: eski koddaki gibi ters çevrilmiş
+        steering_val = max(self.STEER_MAX_RIGHT, min(self.STEER_MAX_LEFT, raw_steer_val))
 
-        angle_val = math.degrees(steering_rad) * self.steering_gain
-        steering_val = max(self.STEER_MAX_RIGHT, min(self.STEER_MAX_LEFT, angle_val)) * -1
+        self.last_steering_deg = int(round(steering_val))
 
-        steering_val = self.steering_filter.update(steering_val)
-        self.last_steering_deg = int(round(self.steering_rate_limiter.update(steering_val, dt)))
-
-        if self.curvature_speed_limit_enable:
-            max_steer_mag = max(abs(self.STEER_MAX_LEFT), abs(self.STEER_MAX_RIGHT))
-            curvature_fraction = min(1.0, abs(self.last_steering_deg) / max_steer_mag)
-
+        # ---- Dönüş şiddetine göre güç artış oranı hesabı (hız kısma yerine) ----
+        if self.curvature_power_boost_enable:
+            curvature_fraction = min(1.0, abs(self.last_steering_deg) / self.max_steer_mag)
             predicted_fraction = self.curvature_predictor.update(curvature_fraction, now)
 
             if predicted_fraction <= self.curvature_free_zone:
@@ -356,11 +374,9 @@ class CmdVelSubscriber(Node):
                 )
                 effective_curv = max(0.0, min(1.0, effective_curv))
 
-            speed_cap_fraction = 1.0 - effective_curv * (1.0 - self.curvature_min_speed_fraction)
+            self.curvature_boost_fraction = effective_curv
         else:
-            speed_cap_fraction = 1.0
-
-        self.target_velocity = self.nav_target_velocity * speed_cap_fraction
+            self.curvature_boost_fraction = 0.0
 
     # ==================== Ana kontrol döngüsü (50 Hz) ====================
 
@@ -374,7 +390,7 @@ class CmdVelSubscriber(Node):
             self.steering_angle_pub.publish(Int16(data=0))
             self.velocity_pid.reset()
             self.velocity_ramp.reset(0.0)
-            self.steering_rate_limiter.reset(0.0)
+            self.stall_timer = 0.0
             return
 
         now = time()
@@ -383,10 +399,14 @@ class CmdVelSubscriber(Node):
 
         ramped_target = self.velocity_ramp.update(self.target_velocity, dt)
 
+        turn_boost = 0.0
+        stall_boost = 0.0
+
         if ramped_target <= 0.02:
             self.last_motor_power = 0
             self.last_brake = True
             self.velocity_pid.reset()
+            self.stall_timer = 0.0
         else:
             error = ramped_target - self.current_velocity
 
@@ -394,12 +414,31 @@ class CmdVelSubscriber(Node):
                 self.last_motor_power = 0
                 self.last_brake = True
                 self.velocity_pid.reset()
+                self.stall_timer = 0.0
             elif error <= 0:
                 self.last_motor_power = 0
                 self.last_brake = False
                 self.velocity_pid.reset()
+                self.stall_timer = 0.0
             else:
-                motor_power = self.velocity_pid.compute(error, dt)
+                base_motor_power = self.velocity_pid.compute(error, dt)
+
+                # ---- Dönüşte ekstra güç (araç dönerken daha fazla güç istiyor) ----
+                turn_boost = self.curvature_boost_fraction * self.turn_power_boost_max
+
+                # ---- Stall (kalkamama) rampası ----
+                # Hedef hız var ama araç fiilen hareket etmiyorsa, süre arttıkça
+                # güç de sürekli artsın - 28'de sabit kalmasın.
+                if self.current_velocity < self.stall_velocity_threshold:
+                    self.stall_timer += dt
+                    stall_boost = self.stall_timer * self.stall_boost_rate
+                else:
+                    self.stall_timer = 0.0
+                    stall_boost = 0.0
+
+                motor_power = base_motor_power + turn_boost + stall_boost
+                motor_power = min(self.absolute_max_motor_power, motor_power)
+
                 self.last_motor_power = int(round(motor_power))
                 self.last_brake = False
 
@@ -409,10 +448,10 @@ class CmdVelSubscriber(Node):
 
         self.get_logger().info(
             f'[YAYIN] Nav Hedef: {self.nav_target_velocity:.2f} | '
-            f'Eğrilik-sınırlı Hedef: {self.target_velocity:.2f} | '
             f'Rampalı Hedef: {ramped_target:.2f} | '
             f'Anlık Hız: {self.current_velocity:.2f} m/s | '
-            f'Motor: {self.last_motor_power} | Fren: {self.last_brake} | '
+            f'Motor: {self.last_motor_power} (turn_boost={turn_boost:.1f}, stall_boost={stall_boost:.1f}) | '
+            f'Fren: {self.last_brake} | '
             f'Direksiyon: {self.last_steering_deg}'
         )
 
