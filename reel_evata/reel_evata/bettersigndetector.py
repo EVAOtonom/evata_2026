@@ -32,19 +32,23 @@ class SignDetectorWithNavigation(Node):
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         src_dir = dir_path.split('/install')[0]  # install kısmını çıkar
-        model_path = os.path.join(src_dir, 'src', 'reel_evata', 'reel_evata', 'utils', 'sol300best.pt')
+        model_path = os.path.join(src_dir, 'src', 'reel_evata', 'reel_evata', 'utils', 'best12.pt')
 
         self.model = YOLO(model_path)
         self.bridge = CvBridge()
         self.fx = 277.0
-        self.tracked_signs = {}
         self.latest_pointcloud = None
         self.last_detection_time = time.time()
         self.detection_interval = 0.15
+
+        # Levha takibi: her levha class_name'e göre gerçek bir OpenCV tracker ile izlenir.
+        # Böylece levha bir kez YOLO ile bulunduktan sonra her karede baştan aranmaz;
+        # YOLO sadece belirli aralıklarla takibi doğrulamak/düzeltmek için çalışır.
+        # self.trackers[class_name] = {'tracker', 'bbox' (x1,y1,x2,y2), 'confidence', 'missed_detections'}
+        self.trackers = {}
+        self.max_missed_detections = 5  # bu kadar YOLO turunda tespit edilmezse takip bırakılır
         
-        # Park levhası tespit sayacı ve kontrol değişkenleri
-        self.consecutive_parking_detections = 0
-        self.required_consecutive_detections = 10
+        # Park levhası kontrol değişkenleri
         self.navigation_sent = False
         self.last_parking_coordinates = None
         
@@ -83,29 +87,105 @@ class SignDetectorWithNavigation(Node):
     def camera_info_callback(self, msg):
         self.fx = msg.k[0]
 
-    def get_parking_sign_position_from_pointcloud(self, center_x, center_y):
-        """Get parking sign position from pointcloud relative to vehicle"""
+    def get_point_from_pointcloud(self, center_x, center_y):
+        """Get (x, y, z) directly from a single pointcloud pixel using targeted uv lookup.
+
+        Uses read_points' `uvs` parameter to fetch only the requested pixel instead of
+        iterating the whole cloud up to that index (which was the main FPS bottleneck).
+        """
         if self.latest_pointcloud is None:
             return None, None, None
-        
+
         try:
             width = self.latest_pointcloud.width
             height = self.latest_pointcloud.height
-            center_x = min(center_x, width - 1)
-            center_y = min(center_y, height - 1)
-            index = center_y * width + center_x
+            center_x = min(max(center_x, 0), width - 1)
+            center_y = min(max(center_y, 0), height - 1)
 
-            gen = point_cloud2.read_points(self.latest_pointcloud, field_names=("x", "y", "z"), skip_nans=False)
-            for i, pt in enumerate(gen):
-                if i == index:
-                    x, y, z = pt
-                    if math.isnan(z) or math.isinf(z) or math.isnan(x) or math.isnan(y):
-                        return None, None, None
-                    return x, y, z
-            return None, None, None
+            gen = point_cloud2.read_points(
+                self.latest_pointcloud,
+                field_names=("x", "y", "z"),
+                skip_nans=False,
+                uvs=[(center_x, center_y)]
+            )
+            pt = next(gen, None)
+            if pt is None:
+                return None, None, None
+            x, y, z = pt
+            if math.isnan(z) or math.isinf(z) or math.isnan(x) or math.isnan(y):
+                return None, None, None
+            return float(x), float(y), float(z)
         except Exception as e:
             self.get_logger().error(f"PointCloud coordinate extraction error: {e}")
             return None, None, None
+
+    def _create_cv_tracker(self):
+        """OpenCV sürümüne göre uyumlu bir tracker oluşturur (KCF: hız/doğruluk dengesi iyi)."""
+        try:
+            return cv2.TrackerKCF_create()
+        except AttributeError:
+            return cv2.legacy.TrackerKCF_create()
+
+    def _update_trackers(self, frame):
+        """Her karede çağrılır: mevcut takipçileri günceller, YOLO çalışmasa bile levhaların
+        konumunu takip eder. Tracker konumu tamamen kaybederse ilgili levha bırakılır."""
+        for class_name in list(self.trackers.keys()):
+            info = self.trackers[class_name]
+            success, box = info['tracker'].update(frame)
+            if success:
+                x, y, w, h = box
+                info['bbox'] = (int(x), int(y), int(x + w), int(y + h))
+            else:
+                self.get_logger().info(f"'{class_name}' takibi kayboldu, bırakılıyor")
+                del self.trackers[class_name]
+
+    def _sync_trackers_with_detections(self, resized_image, scale_x, scale_y):
+        """YOLO ile periyodik tespit yapar; yeni levhalar için tracker başlatır,
+        mevcut takipçileri tespitle düzeltir (drift önlenir), uzun süre tespit
+        edilmeyen levhaları bırakır."""
+        results = self.model(resized_image, verbose=False)
+
+        detected_signs = {}
+        for r in results:
+            for box in r.boxes:
+                if box.conf > 0.6:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    x1 = int(x1 * scale_x)
+                    y1 = int(y1 * scale_y)
+                    x2 = int(x2 * scale_x)
+                    y2 = int(y2 * scale_y)
+                    class_name = self.model.names[int(box.cls)]
+                    confidence = float(box.conf)
+                    detected_signs[class_name] = (x1, y1, x2, y2, confidence)
+
+        for class_name, (x1, y1, x2, y2, confidence) in detected_signs.items():
+            if class_name in self.trackers:
+                # Zaten takip ediliyor: tracker'ı tespitle yeniden hizala (drift düzeltme)
+                info = self.trackers[class_name]
+                info['tracker'] = self._create_cv_tracker()
+                info['tracker'].init(self.annotated_image, (x1, y1, x2 - x1, y2 - y1))
+                info['bbox'] = (x1, y1, x2, y2)
+                info['confidence'] = confidence
+                info['missed_detections'] = 0
+            else:
+                # Yeni levha: yeni tracker başlat
+                tracker = self._create_cv_tracker()
+                tracker.init(self.annotated_image, (x1, y1, x2 - x1, y2 - y1))
+                self.trackers[class_name] = {
+                    'tracker': tracker,
+                    'bbox': (x1, y1, x2, y2),
+                    'confidence': confidence,
+                    'missed_detections': 0
+                }
+                self.get_logger().info(f"Yeni levha takibe alındı: {class_name}")
+
+        # Bu turda YOLO ile tekrar tespit edilmeyen takipçiler için sayaç arttır
+        for class_name in list(self.trackers.keys()):
+            if class_name not in detected_signs:
+                self.trackers[class_name]['missed_detections'] += 1
+                if self.trackers[class_name]['missed_detections'] > self.max_missed_detections:
+                    self.get_logger().info(f"'{class_name}' uzun süredir doğrulanamadı, takip bırakılıyor")
+                    del self.trackers[class_name]
 
     def transform_to_map_frame(self, x, y, z, source_frame="camera_link"):
         """Transform coordinates from camera frame to map frame"""
@@ -194,57 +274,39 @@ class SignDetectorWithNavigation(Node):
         # Eğer hedef konum zaten gönderilmişse, işlemeyi durdur
         if self.navigation_sent:
             return
-            
-        now = time.time()
-        if now - self.last_detection_time < self.detection_interval:
-            return
-        self.last_detection_time = now
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
             cv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR)
-            original_image = cv_image.copy()
+            self.annotated_image = cv_image
 
-            resized_image = cv2.resize(cv_image, (640, 360))
-            scale_x = cv_image.shape[1] / 640
-            scale_y = cv_image.shape[0] / 360
+            # 1) Her karede: mevcut takipçileri güncelle (YOLO çalışmasa bile levha kaybolmaz)
+            if self.trackers:
+                self._update_trackers(cv_image)
 
-            results = self.model(resized_image, verbose=False)
-            self.annotated_image = original_image
+            # 2) Belirli aralıklarla: YOLO ile yeni levha ara / mevcut takipçileri doğrula-düzelt
+            now = time.time()
+            if now - self.last_detection_time >= self.detection_interval:
+                self.last_detection_time = now
+                resized_image = cv2.resize(cv_image, (640, 360))
+                scale_x = cv_image.shape[1] / 640
+                scale_y = cv_image.shape[0] / 360
+                self._sync_trackers_with_detections(resized_image, scale_x, scale_y)
 
-            detected_signs = {}
             sign_data = {}
             parking_sign_detected = False
 
-            for r in results:
-                for box in r.boxes:
-                    if box.conf > 0.6:
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        x1 = int(x1 * scale_x)
-                        y1 = int(y1 * scale_y)
-                        x2 = int(x2 * scale_x)
-                        y2 = int(y2 * scale_y)
-                        class_name = self.model.names[int(box.cls)]
-                        confidence = float(box.conf)
-                        detected_signs[class_name] = (x1, y1, x2, y2, 0, confidence)
-
-            updated_tracked_signs = {}
-            for class_name, values in self.tracked_signs.items():
-                if class_name in detected_signs:
-                    updated_tracked_signs[class_name] = detected_signs[class_name]
-                elif values[4] < 5:
-                    updated_tracked_signs[class_name] = (*values[:4], values[4] + 1, values[5])
-            for class_name, values in detected_signs.items():
-                if class_name not in updated_tracked_signs:
-                    updated_tracked_signs[class_name] = values
-            self.tracked_signs = updated_tracked_signs
-
-            for class_name, (x1, y1, x2, y2, _, confidence) in self.tracked_signs.items():
+            for class_name, info in self.trackers.items():
+                x1, y1, x2, y2 = info['bbox']
+                confidence = info['confidence']
                 center_x = (x1 + x2) // 2
                 center_y = (y1 + y2) // 2
-                distance = self.calculate_distance_pointcloud(center_x, center_y)
 
-                if distance == -1:
+                # Tek pointcloud sorgusu: hem mesafe hem (gerekirse) konum için kullanılır
+                camera_x, camera_y, camera_z = self.get_point_from_pointcloud(center_x, center_y)
+                if camera_x is not None:
+                    distance = math.sqrt(camera_x**2 + camera_y**2 + camera_z**2)
+                else:
                     distance = self.calculate_distance(x1, y1, x2, y2)
 
                 if distance < 0.7 or distance > 25.0:
@@ -256,9 +318,7 @@ class SignDetectorWithNavigation(Node):
                 # Park levhası tespit edildi mi kontrol et
                 if "park" in class_name.lower() or "durak" in class_name.lower():
                     parking_sign_detected = True
-                    
-                    # Koordinatları al ve sakla
-                    camera_x, camera_y, camera_z = self.get_parking_sign_position_from_pointcloud(center_x, center_y)
+
                     if camera_x is not None:
                         map_x, map_y, map_z = self.transform_to_map_frame(camera_x, camera_y, camera_z)
                         if map_x is not None:
@@ -279,24 +339,14 @@ class SignDetectorWithNavigation(Node):
                     self.sign_publisher.publish(msg)
                     self.get_logger().info(f"Published: {msg.data}")
 
-            # Park levhası tespit kontrolü
-            if parking_sign_detected:
-                self.consecutive_parking_detections += 1
-                self.get_logger().info(f"Consecutive parking detections: {self.consecutive_parking_detections}/{self.required_consecutive_detections}")
-                
-                # 10 kez arka arkaya tespit edildi mi?
-                if self.consecutive_parking_detections >= self.required_consecutive_detections and not self.navigation_sent:
-                    if self.last_parking_coordinates is not None:
-                        self.get_logger().info("10 consecutive parking sign detections reached! Sending navigation goal...")
-                        self.navigate_to_parking_sign(self.last_parking_coordinates[0], self.last_parking_coordinates[1])
-                        self.navigation_sent = True
-                    else:
-                        self.get_logger().warn("No valid parking coordinates available for navigation")
-            else:
-                # Park levhası tespit edilmedi, sayacı sıfırla
-                if self.consecutive_parking_detections > 0:
-                    self.get_logger().info("Parking sign not detected, resetting counter")
-                self.consecutive_parking_detections = 0
+            # Park levhası tespit kontrolü (sayaç yok, ilk geçerli tespitte navigasyon gönderilir)
+            if parking_sign_detected and not self.navigation_sent:
+                if self.last_parking_coordinates is not None:
+                    self.get_logger().info("Parking sign detected! Sending navigation goal...")
+                    self.navigate_to_parking_sign(self.last_parking_coordinates[0], self.last_parking_coordinates[1])
+                    self.navigation_sent = True
+                else:
+                    self.get_logger().warn("No valid parking coordinates available for navigation")
 
             if sign_data:
                 msg = String()
@@ -312,28 +362,6 @@ class SignDetectorWithNavigation(Node):
 
         except Exception as e:
             self.get_logger().error(f"Image processing error: {e}")
-
-    def calculate_distance_pointcloud(self, center_x, center_y):
-        if self.latest_pointcloud is None:
-            return -1
-        try:
-            width = self.latest_pointcloud.width
-            height = self.latest_pointcloud.height
-            center_x = min(center_x, width - 1)
-            center_y = min(center_y, height - 1)
-            index = center_y * width + center_x
-
-            gen = point_cloud2.read_points(self.latest_pointcloud, field_names=("x", "y", "z"), skip_nans=False)
-            for i, pt in enumerate(gen):
-                if i == index:
-                    x, y, z = pt
-                    if math.isnan(z) or math.isinf(z):
-                        return -1
-                    return math.sqrt(x**2 + y**2 + z**2)
-            return -1
-        except Exception as e:
-            self.get_logger().error(f"PointCloud error: {e}")
-            return -1
 
     def calculate_distance(self, x1, y1, x2, y2):
         real_width = 0.5

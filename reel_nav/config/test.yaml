@@ -1,150 +1,170 @@
 amcl:
   ros__parameters:
-    use_sim_time: false
-    robot_model_type: nav2_amcl::DifferentialMotionModel
-    alpha1: 0.3
-    alpha2: 0.1
-    alpha3: 0.1
-    alpha4: 0.3
-    alpha5: 0.0
-    base_frame_id: base_footprint
-    global_frame_id: map
-    odom_frame_id: odom
-    tf_broadcast: false
+    use_sim_time: False
+
+    ### Hareket modeli ###
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    alpha1: 0.3   # Yaw dönüş gürültüsü - düşük tuttum, tekerlek odometride güven varsa
+    alpha2: 0.1   # Velocity’den dönüş gürültüsü - makul düşük
+    alpha3: 0.1   # Translation (ilerleme) gürültüsü - düşük, tekerlek odometriye güven
+    alpha4: 0.3   # Rotation’dan translasyon gürültüsü - düşük
+    alpha5: 0.0   # Kullanılmıyor
+
+    ### Frame Ayarları ###
+    base_frame_id: "base_footprint"
+    global_frame_id: "map"
+    odom_frame_id: "odom"
+    tf_broadcast: true
     transform_tolerance: 0.5
-    laser_model_type: likelihood_field
-    laser_max_range: 100.0
+
+    ### Lazer modeli ###
+    #scan_topic: scan
+    laser_model_type: "likelihood_field"
+    laser_max_range: 100.0    # Gerçek lidar max menzilin   #70 yaparak da dene
     laser_min_range: 2.0
-    laser_likelihood_max_dist: 1.0
-    z_hit: 0.85
-    z_rand: 0.5
-    z_max: 0.03
-    z_short: 0.02
-    sigma_hit: 0.15
-    lambda_short: 0.05
-    do_beamskip: true
+    laser_likelihood_max_dist: 1.0   # 2.0’den biraz daha yüksek, çünkü uzak mesafelerde tolerans artmalı
+    z_hit: 0.85                    # Güven artırıldı, lidar uzun menzilli ve temizse
+    z_rand: 0.50                   # Rastgele ölçüm (gürültü) olasılığı biraz düşürüldü
+    z_max: 0.03                   # Çok uzak ve yanlış ölçümlere düşük ağırlık
+    z_short: 0.02                 # Ani kısa mesafe hatalarına düşük ağırlık
+    sigma_hit: 0.15               # Ölçüm gürültüsü standart sapması azaldı, lidar kaliteliysa
+    lambda_short: 0.05            # Kısa mesafe model parametresi
+
+    ### Beam skip ayarları ###
+    do_beamskip: true            # Kapalı bırak, sorun yaşarsan aç
     beam_skip_distance: 0.5
     beam_skip_threshold: 0.3
     beam_skip_error_threshold: 0.9
-    min_particles: 100
+
+    ### Parçacık filtre ayarları ###
+    min_particles: 100            # Parçacık sayısı, biraz arttırdım daha stabil pozisyon için
     max_particles: 3000
     resample_interval: 3
-    pf_err: 0.03
-    pf_z: 0.99
+    pf_err: 0.03                 # Daha hassas hata toleransı
+    pf_z: 0.99                   # Güven seviyesi yüksek
     recovery_alpha_slow: 0.001
     recovery_alpha_fast: 0.1
-    update_min_d: 0.2
-    update_min_a: 0.15
+
+    ### Güncelleme eşikleri ###
+    update_min_d: 0.20            # 20 cm hareketten sonra güncelle
+    update_min_a: 0.15            # 8.5° dönüşten sonra güncelle
     set_initial_pose: false
     always_reset_initial_pose: false
+
+    ### Diğer ###
     save_pose_rate: 0.05
+
+
+
 bt_navigator:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: False
     global_frame: map
     robot_base_frame: base_footprint
     odom_topic: /odom
     bt_loop_duration: 10
     default_server_timeout: 20
     plugin_lib_names:
-    - nav2_compute_path_to_pose_action_bt_node
-    - nav2_compute_path_through_poses_action_bt_node
-    - nav2_smooth_path_action_bt_node
-    - nav2_follow_path_action_bt_node
-    - nav2_spin_action_bt_node
-    - nav2_wait_action_bt_node
-    - nav2_assisted_teleop_action_bt_node
-    - nav2_back_up_action_bt_node
-    - nav2_drive_on_heading_bt_node
-    - nav2_clear_costmap_service_bt_node
-    - nav2_is_stuck_condition_bt_node
-    - nav2_goal_reached_condition_bt_node
-    - nav2_goal_updated_condition_bt_node
-    - nav2_globally_updated_goal_condition_bt_node
-    - nav2_is_path_valid_condition_bt_node
-    - nav2_initial_pose_received_condition_bt_node
-    - nav2_reinitialize_global_localization_service_bt_node
-    - nav2_rate_controller_bt_node
-    - nav2_distance_controller_bt_node
-    - nav2_speed_controller_bt_node
-    - nav2_truncate_path_action_bt_node
-    - nav2_truncate_path_local_action_bt_node
-    - nav2_goal_updater_node_bt_node
-    - nav2_recovery_node_bt_node
-    - nav2_pipeline_sequence_bt_node
-    - nav2_round_robin_node_bt_node
-    - nav2_transform_available_condition_bt_node
-    - nav2_time_expired_condition_bt_node
-    - nav2_path_expiring_timer_condition
-    - nav2_distance_traveled_condition_bt_node
-    - nav2_single_trigger_bt_node
-    - nav2_goal_updated_controller_bt_node
-    - nav2_is_battery_low_condition_bt_node
-    - nav2_navigate_through_poses_action_bt_node
-    - nav2_navigate_to_pose_action_bt_node
-    - nav2_remove_passed_goals_action_bt_node
-    - nav2_planner_selector_bt_node
-    - nav2_controller_selector_bt_node
-    - nav2_goal_checker_selector_bt_node
-    - nav2_controller_cancel_bt_node
-    - nav2_path_longer_on_approach_bt_node
-    - nav2_wait_cancel_bt_node
-    - nav2_spin_cancel_bt_node
-    - nav2_back_up_cancel_bt_node
-    - nav2_assisted_teleop_cancel_bt_node
-    - nav2_drive_on_heading_cancel_bt_node
-    - nav2_is_battery_charging_condition_bt_node
+      - nav2_compute_path_to_pose_action_bt_node
+      - nav2_compute_path_through_poses_action_bt_node
+      - nav2_smooth_path_action_bt_node
+      - nav2_follow_path_action_bt_node
+      - nav2_spin_action_bt_node
+      - nav2_wait_action_bt_node
+      - nav2_assisted_teleop_action_bt_node
+      - nav2_back_up_action_bt_node
+      - nav2_drive_on_heading_bt_node
+      - nav2_clear_costmap_service_bt_node
+      - nav2_is_stuck_condition_bt_node
+      - nav2_goal_reached_condition_bt_node
+      - nav2_goal_updated_condition_bt_node
+      - nav2_globally_updated_goal_condition_bt_node
+      - nav2_is_path_valid_condition_bt_node
+      - nav2_initial_pose_received_condition_bt_node
+      - nav2_reinitialize_global_localization_service_bt_node
+      - nav2_rate_controller_bt_node
+      - nav2_distance_controller_bt_node
+      - nav2_speed_controller_bt_node
+      - nav2_truncate_path_action_bt_node
+      - nav2_truncate_path_local_action_bt_node
+      - nav2_goal_updater_node_bt_node
+      - nav2_recovery_node_bt_node
+      - nav2_pipeline_sequence_bt_node
+      - nav2_round_robin_node_bt_node
+      - nav2_transform_available_condition_bt_node
+      - nav2_time_expired_condition_bt_node
+      - nav2_path_expiring_timer_condition
+      - nav2_distance_traveled_condition_bt_node
+      - nav2_single_trigger_bt_node
+      - nav2_goal_updated_controller_bt_node
+      - nav2_is_battery_low_condition_bt_node
+      - nav2_navigate_through_poses_action_bt_node
+      - nav2_navigate_to_pose_action_bt_node
+      - nav2_remove_passed_goals_action_bt_node
+      - nav2_planner_selector_bt_node
+      - nav2_controller_selector_bt_node
+      - nav2_goal_checker_selector_bt_node
+      - nav2_controller_cancel_bt_node
+      - nav2_path_longer_on_approach_bt_node
+      - nav2_wait_cancel_bt_node
+      - nav2_spin_cancel_bt_node
+      - nav2_back_up_cancel_bt_node
+      - nav2_assisted_teleop_cancel_bt_node
+      - nav2_drive_on_heading_cancel_bt_node
+      - nav2_is_battery_charging_condition_bt_node
+
 bt_navigator_navigate_through_poses_rclcpp_node:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: False
+
 bt_navigator_navigate_to_pose_rclcpp_node:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: False
+
 controller_server:
   ros__parameters:
-    use_sim_time: false
-    controller_frequency: 20.0
-    goal_checker_plugins:
-    - general_goal_checker
+    use_sim_time: False
+    controller_frequency: 30.0
+    goal_checker_plugins: ["general_goal_checker"]
     use_collision_checker: false
     progress_checker.movement_time_allowance: 50.0
     progress_checker.required_movement_radius: 0.001
     general_goal_checker:
-      plugin: nav2_controller::SimpleGoalChecker
+      plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 1.0
       yaw_goal_tolerance: 0.7
-      stateful: true
+      stateful: True
     FollowPath:
-      plugin: nav2_mppi_controller::MPPIController
-      time_steps: 50
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 64
       model_dt: 0.05
-      batch_size: 1000
-      vx_max: 0.5
+      batch_size: 2000
+      vx_max: 0.7
       vx_min: -0.2
       vx_std: 0.2
+      # 0.15 -> 0.25: MPPI'nin ornekleme (sampling) sirasinda daha genis bir
+      # angular.z araligini denemesini saglar. Dusuk std, orneklerin ortalama
+      # etrafinda cok siki kumelenmesine ve path keskin donse bile "tam kilide"
+      # yakin trajectory'lerin yeterince test edilmemesine yol aciyordu - bu da
+      # dönüşlerde "cekingen" (dusuk angular.z) davranisin bir nedeniydi.
       wz_std: 0.15
-      wz_max: 0.35
-      iteration_count: 1
+      wz_max: 0.40
+      iteration_count: 10
       prune_distance: 1.7
       transform_tolerance: 0.5
-      motion_model: Ackermann
+      motion_model: "Ackermann"
       visualize: false
       AckermannConstraints:
-        min_turning_r: 3.2
-      critics:
-      - ConstraintCritic
-      - CostCritic
-      - GoalCritic
-      - GoalAngleCritic
-      - PathAlignCritic
-      - PathFollowCritic
-      - PathAngleCritic
-      - PreferForwardCritic
-      - TwirlingCritic
+        min_turning_r: 1.5
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic", "TwirlingCritic"]
       ConstraintCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 4.0
+        # 4.0 -> 5.0: Orneklenen trajectory'lerin fiziksel limitlerin (vx/wz max-min)
+        # disina cikan kisimlarini daha sikinabir cezalandirir. Bu, agirlikli
+        # ortalamaya (weighted average) fiziksel olarak "asiri" trajectory'lerin
+        # karismasini azaltir - sonuc: daha az cycle-to-cycle sarsinti (jitter).
+        cost_weight: 5.0
       GoalCritic:
         enabled: true
         cost_power: 1
@@ -158,7 +178,9 @@ controller_server:
       PreferForwardCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 5.0
+        # 5.0 -> 6.0: Ileri yonlu hareketi biraz daha fazla tercih ettirir, gereksiz
+        # yanal savrulma/telas hareketlerini azaltir - genel surus stabilitesine katkida bulunur.
+        cost_weight: 6.0
         threshold_to_consider: 0.5
       CostCritic:
         enabled: true
@@ -182,112 +204,156 @@ controller_server:
         enabled: true
         cost_power: 1
         cost_weight: 10.0
-        offset_from_furthest: 3
+        # 3 -> 5: Path uzerinde daha ileriye bakarak hizalanmayi hedefler. Bu,
+        # donuse "gelmeden once" tepki verilmesini (öngörülü/anticipatory steering)
+        # saglar - son anda sert duzeltme yerine erken ve yumusak giris.
+        offset_from_furthest: 5
         threshold_to_consider: 1.5
       PathAngleCritic:
         enabled: true
         cost_power: 1
         cost_weight: 6.0
-        offset_from_furthest: 4
+        # 4 -> 6: Daha ileri bir path noktasinin yon farkina bakar (öngörülü).
+        offset_from_furthest: 6
         threshold_to_consider: 0.5
-        max_angle_to_furthest: 0.6
+        # 0.6 -> 0.9 rad (~34° -> ~52°): Onceki deger, ileride gercekten keskin
+        # bir donus varsa bile aci farkini "gereginden az onemli" gosteriyordu,
+        # bu da MPPI'nin donuse erken ve kararli girmek yerine gecikmeli/cekingen
+        # tepki vermesine katkida bulunuyordu.
+        max_angle_to_furthest: 0.9
         mode: 0
       TwirlingCritic:
         enabled: true
         twirling_cost_power: 1
-        twirling_cost_weight: 40.0
+        # 40 idi: diğer TÜM kritiklerden (en yükseği CostCritic=20) çok daha baskındı.
+        # MPPI, "dönme" hareketini bu kadar ağır cezalandırınca, path sert dönse bile
+        # kontrolcü düşük angular.z ile "idare etmeyi" tercih ediyordu (full-sağa
+        # planlanan rotada bile cmd_vel'in düşük gelmesinin asıl sebebi buydu).
+        # 8.0: hâlâ gereksiz sağa-sola sallanmayı (twirling/oscillation) engeller,
+        # ama path gerçekten keskin döndüğünde MPPI'nin buna uyum sağlamasına izin verir.
+        twirling_cost_weight: 8.0
+
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      update_frequency: 15.0
+      publish_frequency: 15.0
       global_frame: odom
       robot_base_frame: base_footprint
-      use_sim_time: false
-      transform_tolerance: 0.5
+      use_sim_time: False
       rolling_window: true
       width: 20
       height: 12
-      resolution: 0.1
-      footprint: '[[1.35, 0.67], [1.35, -0.67], [-1.35, -0.67], [-1.35, 0.67]]'
-      always_send_full_costmap: false
-      plugins:
-      - obstacle_layer
-      - inflation_layer
+      resolution: 0.05
+      footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
+      plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
-        plugin: nav2_costmap_2d::InflationLayer
-        enabled: true
+        plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 1.2
         inflation_radius: 1.5
-      obstacle_layer:
-        plugin: nav2_costmap_2d::ObstacleLayer
-        enabled: true
-        footprint_clearing_enabled: true
-        combination_method: 1
-        observation_sources: scan_nav lane_pointcloud
-        scan_nav:
-          topic: /scan_nav
-          data_type: LaserScan
-          marking: true
-          clearing: true
-          obstacle_min_range: 0.5
-          obstacle_max_range: 10.0
-          raytrace_min_range: 0.5
-          raytrace_max_range: 12.0
-          observation_persistence: 0.0
+        always_send_full_costmap: False
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        max_obstacle_height: 0.3
+        mark_threshold: 0
+        observation_sources: scan lane_pointcloud
+        scan:
+          topic: /akif
+          max_obstacle_height: 0.3
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+          raytrace_max_range: 15.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 14.5
+          obstacle_min_range: 0.0
+          observation_persistence: 3.0
+
+
         lane_pointcloud:
           topic: /lane_pointcloud
-          data_type: PointCloud2
-          marking: true
-          clearing: false
-          min_obstacle_height: -0.2
           max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+          raytrace_max_range: 150.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 150.5
           obstacle_min_range: 0.0
-          obstacle_max_range: 15.0
-          observation_persistence: 1.0
+          observation_persistence: 20.0
+
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 1.0
-      publish_frequency: 1.0
+      update_frequency: 15.0
+      publish_frequency: 15.0
       global_frame: map
       robot_base_frame: base_footprint
-      use_sim_time: false
-      transform_tolerance: 0.5
-      footprint: '[[1.35, 0.67], [1.35, -0.67], [-1.35, -0.67], [-1.35, 0.67]]'
+      use_sim_time: False
+      footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
       resolution: 0.05
       track_unknown_space: true
-      always_send_full_costmap: false
-      plugins:
-      - static_layer
-      - inflation_layer
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan lane_pointcloud
+        scan:
+          topic: /akif
+          max_obstacle_height: 0.3
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+          raytrace_max_range: 15.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 14.5
+          obstacle_min_range: 0.0
+          observation_persistence: 3.0
+
+        lane_pointcloud:
+          topic: /lane_pointcloud
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+          raytrace_max_range: 150.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 150.5
+          obstacle_min_range: 0.0
+          observation_persistence: 20.0
       static_layer:
-        plugin: nav2_costmap_2d::StaticLayer
-        enabled: true
-        map_subscribe_transient_local: true
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
       inflation_layer:
-        plugin: nav2_costmap_2d::InflationLayer
-        enabled: true
+        plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 1.2
         inflation_radius: 1.5
+        always_send_full_costmap: False
+
 map_server:
   ros__parameters:
-    use_sim_time: false
-    yaml_filename: ''
+    use_sim_time: False
+    yaml_filename: ""
+
 map_saver:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: False
     save_map_timeout: 5.0
     free_thresh_default: 0.25
     occupied_thresh_default: 0.65
-    map_subscribe_transient_local: true
+    map_subscribe_transient_local: True
+
 planner_server:
   ros__parameters:
-    planner_plugins:
-    - GridBased
-    use_sim_time: false
+    planner_plugins: ["GridBased"]
+    use_sim_time: False
     GridBased:
-      plugin: nav2_smac_planner/SmacPlannerHybrid
+      plugin: "nav2_smac_planner/SmacPlannerHybrid"
       downsample_costmap: false
       downsampling_factor: 1
       tolerance: 0.5
@@ -295,16 +361,21 @@ planner_server:
       max_iterations: -1
       max_on_approach_iterations: 10
       max_planning_time: 10.0
-      motion_model_for_search: DUBIN
+      motion_model_for_search: "DUBIN"
       angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5
       analytic_expansion_max_length: 3.0
       analytic_expansion_max_cost: 200.0
       analytic_expansion_max_cost_override: false
-      minimum_turning_radius: 3.2
+      minimum_turning_radius: 1.5   # Dogrulandi: wheelbase=1.0m ile gercek max tekerlek acisi ~21.8 dereceye denk gelir
       reverse_penalty: 31.0
       change_penalty: 0.0
-      non_straight_penalty: 1.0
+      # 1.0 -> 1.3: Hybrid A*'in duz-degil (donen) hareket primitiflerine biraz daha
+      # fazla maliyet vermesini sagliyor. Bu, path'in gereksiz yere zigzag/mikro-donus
+      # yapmasini azaltir (daha az "sarsinti"), ama minimum_turning_radius ayri bir
+      # sert kisit oldugu icin gercekten gereken keskin donuslerde path yine dogru
+      # yaricapi kullanir - bu param sadece "gereksiz" donusleri cezalandirir.
+      non_straight_penalty: 1.3
       cost_penalty: 5.0
       retrospective_penalty: 0.015
       lookup_table_size: 20.0
@@ -313,85 +384,74 @@ planner_server:
       use_quadratic_cost_penalty: false
       downsample_obstacle_heuristic: true
       allow_primitive_interpolation: false
-      goal_heading_mode: DEFAULT
+      goal_heading_mode: "DEFAULT"
+
 smoother_server:
   ros__parameters:
-    use_sim_time: false
-    smoother_plugins:
-    - simple_smoother
+    use_sim_time: False
+    smoother_plugins: ["simple_smoother"]
     simple_smoother:
-      plugin: nav2_smoother::SimpleSmoother
+      plugin: "nav2_smoother::SimpleSmoother"
       tolerance: 1.0e-10
       max_its: 1000
-      do_refinement: true
+      do_refinement: True
 behavior_server:
   ros__parameters:
     costmap_topic: local_costmap/costmap_raw
     footprint_topic: local_costmap/published_footprint
     cycle_frequency: 10.0
-    behavior_plugins:
-    - spin
-    - backup
-    - drive_on_heading
-    - assisted_teleop
-    - wait
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
     spin:
-      plugin: nav2_behaviors/Spin
+      plugin: "nav2_behaviors/Spin"
     backup:
-      plugin: nav2_behaviors/BackUp
+      plugin: "nav2_behaviors/BackUp"
     drive_on_heading:
-      plugin: nav2_behaviors/DriveOnHeading
+      plugin: "nav2_behaviors/DriveOnHeading"
     wait:
-      plugin: nav2_behaviors/Wait
+      plugin: "nav2_behaviors/Wait"
     assisted_teleop:
-      plugin: nav2_behaviors/AssistedTeleop
+      plugin: "nav2_behaviors/AssistedTeleop"
     global_frame: odom
     robot_base_frame: base_footprint
     transform_tolerance: 0.5
-    use_sim_time: false
+    use_sim_time: False
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
     rotational_acc_lim: 3.2
+
 robot_state_publisher:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: False
+
 waypoint_follower:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: False
     loop_rate: 20
     stop_on_failure: false
-    waypoint_task_executor_plugin: wait_at_waypoint
+    waypoint_task_executor_plugin: "wait_at_waypoint"
     wait_at_waypoint:
-      plugin: nav2_waypoint_follower::WaitAtWaypoint
-      enabled: true
-      waypoint_pause_duration: 200
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: True
+      waypoint_pause_duration: 200  # ms cinsinden bekleme süresi
+
 velocity_smoother:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: False
     smoothing_frequency: 20.0
-    scale_velocities: false
-    feedback: OPEN_LOOP
-    max_velocity:
-    - 0.9
-    - 0.0
-    - 0.35
-    min_velocity:
-    - -0.2
-    - 0.0
-    - -0.35
-    max_accel:
-    - 0.5
-    - 0.0
-    - 0.5
-    max_decel:
-    - -0.5
-    - 0.0
-    - -0.5
-    odom_topic: odom
+    scale_velocities: False
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.7, 0.0, 0.40]
+    min_velocity: [-0.2, 0.0, -0.40]
+    # max_accel/max_decel'in 3. elemani (z/angular): 0.5 -> 1.0 rad/s^2.
+    # Eskisiyle 0'dan wz_max=0.35'e ulasmak ~0.7s suruyordu - MPPI "tam kirin"
+    # dese bile fiziksel komut gecikmeli/yumusatilarak geliyordu, bu da donuslerde
+    # "cekingen" bir his yaratiyordu. 1.0 ile bu sure ~0.35s'ye iniyor: hala ani
+    # sicramayi (jerk) engelleyen bir rampa var, ama MPPI'nin kararli donus
+    # komutuna cok daha hizli ulasiliyor. Linear (1. eleman) degismedi.
+    max_accel: [0.5, 0.0, 1.0]
+    max_decel: [-0.5, 0.0, -1.0]
+    odom_topic: "odom"
     odom_duration: 0.1
-    deadband_velocity:
-    - 0.0
-    - 0.0
-    - 0.0
+    deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0

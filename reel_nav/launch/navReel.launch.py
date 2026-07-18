@@ -293,14 +293,14 @@ def generate_launch_description():
                     'use_sim_time': use_sim_time,
                     'target_frame': 'base_footprint',
                     'transform_tolerance': 0.10,
-                    'min_height': -0.05,
-                    'max_height': 1.80,
+                    'min_height': -0.85,
+                    'max_height': 1.00,
                     'angle_min': -3.141592653589793,
                     'angle_max': 3.141592653589793,
                     'angle_increment': 0.008726646259972,
                     'scan_time': 0.105,
-                    'range_min': 0.50,
-                    'range_max': 12.0,
+                    'range_min': 0.0,
+                    'range_max': 30.0,
                     'use_inf': True
                 }
             ],
