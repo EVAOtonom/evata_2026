@@ -34,14 +34,14 @@
     # LIO-SAM TF yayını:
     # true  -> LIO-SAM odom -> base_footprint TF yayınlar
     # false -> LIO-SAM sadece odometry topic yayınlar, TF'yi EKF veya başka node yayınlar
-    publishTF: false
+    publishTF: true
 
 
     # =========================
     # GPS SETTINGS
     # =========================
 
-    useImuHeadingInitialization: false
+    useImuHeadingInitialization: true
     useGpsElevation: false
     gpsCovThreshold: 20.0
     poseCovThreshold: 1.0
@@ -110,12 +110,12 @@
     # Eğer araç sabitken X/Y kayarsa veya Large velocity verirse
     # sadece bu iki matris üzerinde oynayacağız.
     extrinsicRot: [1.0, 0.0, 0.0,
-                   0.0, 1.0, 0.0,
-                   0.0, 0.0, 1.0]
+                   0.0, -1.0, 0.0,
+                   0.0, 0.0, -1.0]
 
     extrinsicRPY: [1.0, 0.0, 0.0,
-                   0.0, 1.0, 0.0,
-                   0.0, 0.0, 1.0]
+                   0.0, -1.0, 0.0,
+                   0.0, 0.0, -1.0]
 
 
     # =========================

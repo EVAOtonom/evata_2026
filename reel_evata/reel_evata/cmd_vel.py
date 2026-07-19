@@ -98,7 +98,7 @@ class CmdVelSubscriber(Node):
         super().__init__('cmd_vel_subscriber')
 
         # ==================== HIZ PARAMETRELERI ====================
-        self.declare_parameter('max_motor_power', 33)
+        self.declare_parameter('max_motor_power', 35)
         self.declare_parameter('min_motor_power', 28)
         self.declare_parameter('max_velocity', 0.8)          # m/s, nav'dan gelen hedefin tavani
         self.declare_parameter('vel_kp', 4.0)
@@ -123,11 +123,11 @@ class CmdVelSubscriber(Node):
         # ==================== DONUSTE GUC ARTISI ====================
         self.declare_parameter('curvature_power_boost_enable', True)
         self.declare_parameter('curvature_free_zone', 0.25)
-        self.declare_parameter('turn_power_boost_max', 1.0)
+        self.declare_parameter('turn_power_boost_max', 2.0)
 
         # ==================== KALKIS / STALL ====================
-        self.declare_parameter('stall_boost_rate', 1.0)
-        self.declare_parameter('absolute_max_motor_power', 33)
+        self.declare_parameter('stall_boost_rate', 2.0)
+        self.declare_parameter('absolute_max_motor_power', 35)
 
         self._load_params()
         self.add_on_set_parameters_callback(self._on_param_update)

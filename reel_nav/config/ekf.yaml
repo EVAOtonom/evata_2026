@@ -184,4 +184,5 @@ navsat_transform_node:
     use_odometry_yaw: false
 
     wait_for_datum: true
-    datum: [41.0569538, 28.8204359, 0.0]
+    #datum: [41.0569538, 28.8204359, 0.0]  bahce
+    datum: [41.056458, 28.820518, 116.291259]
