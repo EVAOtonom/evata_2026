@@ -83,41 +83,29 @@ class SignDetectorWithNavigation(Node):
 
     def point_cloud_callback(self, msg):
         self.latest_pointcloud = msg
+        try:
+            arr = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, msg.point_step)
+            # x,y,z alanlarının byte offset'lerini fields'ten al (genelde 0,4,8 ama garanti için kontrol edelim)
+            xyz = arr[:, :, 0:12].view(np.float32).reshape(msg.height, msg.width, 3)
+            self.pointcloud_xyz = xyz
+        except Exception as e:
+            self.get_logger().error(f"PointCloud numpy conversion error: {e}")
+            self.pointcloud_xyz = None
     
     def camera_info_callback(self, msg):
         self.fx = msg.k[0]
 
     def get_point_from_pointcloud(self, center_x, center_y):
-        """Get (x, y, z) directly from a single pointcloud pixel using targeted uv lookup.
-
-        Uses read_points' `uvs` parameter to fetch only the requested pixel instead of
-        iterating the whole cloud up to that index (which was the main FPS bottleneck).
-        """
-        if self.latest_pointcloud is None:
+        """O(1) direkt numpy indeksleme - tracker/uvs bug'ından etkilenmez."""
+        if getattr(self, 'pointcloud_xyz', None) is None:
             return None, None, None
-
-        try:
-            width = self.latest_pointcloud.width
-            height = self.latest_pointcloud.height
-            center_x = min(max(center_x, 0), width - 1)
-            center_y = min(max(center_y, 0), height - 1)
-
-            gen = point_cloud2.read_points(
-                self.latest_pointcloud,
-                field_names=("x", "y", "z"),
-                skip_nans=False,
-                uvs=[(center_x, center_y)]
-            )
-            pt = next(gen, None)
-            if pt is None:
-                return None, None, None
-            x, y, z = pt
-            if math.isnan(z) or math.isinf(z) or math.isnan(x) or math.isnan(y):
-                return None, None, None
-            return float(x), float(y), float(z)
-        except Exception as e:
-            self.get_logger().error(f"PointCloud coordinate extraction error: {e}")
+        height, width, _ = self.pointcloud_xyz.shape
+        cx = min(max(center_x, 0), width - 1)
+        cy = min(max(center_y, 0), height - 1)
+        x, y, z = self.pointcloud_xyz[cy, cx]
+        if np.isnan(x) or np.isnan(y) or np.isnan(z) or np.isinf(z):
             return None, None, None
+        return float(x), float(y), float(z)
 
     def _create_cv_tracker(self):
         """OpenCV sürümüne göre uyumlu bir tracker oluşturur (KCF: hız/doğruluk dengesi iyi)."""
