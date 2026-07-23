@@ -24,6 +24,7 @@ import json
 import time
 import tf2_ros
 
+
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 
 class SignDetectorWithNavigation(Node):
@@ -31,8 +32,8 @@ class SignDetectorWithNavigation(Node):
         super().__init__('sign_detector_navigation_node')
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        src_dir = dir_path.split('/install')[0]  # install kısmını çıkar
-        model_path = os.path.join(src_dir, 'src', 'reel_evata', 'reel_evata', 'utils', 'best12.pt')
+        src_dir = dir_path.split('/install')[0]
+        model_path = os.path.join(src_dir, 'src', 'reel_evata', 'reel_evata', 'utils', 'best26.pt')
 
         self.model = YOLO(model_path)
         self.bridge = CvBridge()
@@ -41,82 +42,76 @@ class SignDetectorWithNavigation(Node):
         self.last_detection_time = time.time()
         self.detection_interval = 0.15
 
-        # Levha takibi: her levha class_name'e göre gerçek bir OpenCV tracker ile izlenir.
-        # Böylece levha bir kez YOLO ile bulunduktan sonra her karede baştan aranmaz;
-        # YOLO sadece belirli aralıklarla takibi doğrulamak/düzeltmek için çalışır.
-        # self.trackers[class_name] = {'tracker', 'bbox' (x1,y1,x2,y2), 'confidence', 'missed_detections'}
+
         self.trackers = {}
-        self.max_missed_detections = 5  # bu kadar YOLO turunda tespit edilmezse takip bırakılır
-        
-        # Park levhası kontrol değişkenleri
+        self.max_missed_detections = 5
+
         self.navigation_sent = False
         self.last_parking_coordinates = None
-        
-        # Map and navigation related
-        self.parking_locations = {}  # Store detected parking sign locations
+
+        self.parking_locations = {}
         self.map_data = None
         self.map_origin = None
         self.map_resolution = 0.05
-        
-        # TF2 for coordinate transformations
+
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        
-        # Subscribers
+
         self.create_subscription(Image, "/zed2i/zed_node/rgb/image_rect_color", self.color_image_callback, 10)
         self.create_subscription(CameraInfo, "/zed2i/zed_node/rgb/camera_info", self.camera_info_callback, 10)
         self.create_subscription(PointCloud2, "/zed2i/zed_node/point_cloud/cloud_registered", self.point_cloud_callback, 10)
 
-        
-        # Publishers
         self.sign_publisher = self.create_publisher(String, "/detected_signs", 10)
-        
-        # Navigation action client
+
         self.navigate_action_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
-        
-        # Navigation related variables
-        self.parking_navigation_queue = []  # Queue of parking locations to visit
+
+        self.parking_navigation_queue = []
         self.current_parking_index = 0
-        self.auto_navigate = False  # Flag to enable automatic navigation to all parking spots
-        
+        self.auto_navigate = False
         self.get_logger().info("Sign Detector with Navigation initialized")
 
     def point_cloud_callback(self, msg):
         self.latest_pointcloud = msg
-        try:
-            arr = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, msg.point_step)
-            # x,y,z alanlarının byte offset'lerini fields'ten al (genelde 0,4,8 ama garanti için kontrol edelim)
-            xyz = arr[:, :, 0:12].view(np.float32).reshape(msg.height, msg.width, 3)
-            self.pointcloud_xyz = xyz
-        except Exception as e:
-            self.get_logger().error(f"PointCloud numpy conversion error: {e}")
-            self.pointcloud_xyz = None
-    
+
     def camera_info_callback(self, msg):
         self.fx = msg.k[0]
 
     def get_point_from_pointcloud(self, center_x, center_y):
-        """O(1) direkt numpy indeksleme - tracker/uvs bug'ından etkilenmez."""
-        if getattr(self, 'pointcloud_xyz', None) is None:
+        if self.latest_pointcloud is None:
             return None, None, None
-        height, width, _ = self.pointcloud_xyz.shape
-        cx = min(max(center_x, 0), width - 1)
-        cy = min(max(center_y, 0), height - 1)
-        x, y, z = self.pointcloud_xyz[cy, cx]
-        if np.isnan(x) or np.isnan(y) or np.isnan(z) or np.isinf(z):
-            return None, None, None
-        return float(x), float(y), float(z)
 
+        try:
+            cloud = self.latest_pointcloud
+            width = cloud.width
+            height = cloud.height
+            center_x = int(min(max(center_x, 0), width - 1))
+            center_y = int(min(max(center_y, 0), height - 1))
+
+            x_offset = next(f.offset for f in cloud.fields if f.name == 'x')
+            y_offset = next(f.offset for f in cloud.fields if f.name == 'y')
+            z_offset = next(f.offset for f in cloud.fields if f.name == 'z')
+
+            point_offset = center_y * cloud.row_step + center_x * cloud.point_step
+
+            data = cloud.data
+            x = np.frombuffer(data, dtype=np.float32, count=1, offset=point_offset + x_offset)[0]
+            y = np.frombuffer(data, dtype=np.float32, count=1, offset=point_offset + y_offset)[0]
+            z = np.frombuffer(data, dtype=np.float32, count=1, offset=point_offset + z_offset)[0]
+
+            if math.isnan(z) or math.isinf(z) or math.isnan(x) or math.isnan(y):
+                return None, None, None
+            return float(x), float(y), float(z)
+        except Exception as e:
+            self.get_logger().error(f"PointCloud coordinate extraction error: {e}")
+            return None, None, None
+    
     def _create_cv_tracker(self):
-        """OpenCV sürümüne göre uyumlu bir tracker oluşturur (KCF: hız/doğruluk dengesi iyi)."""
         try:
             return cv2.TrackerKCF_create()
         except AttributeError:
             return cv2.legacy.TrackerKCF_create()
 
     def _update_trackers(self, frame):
-        """Her karede çağrılır: mevcut takipçileri günceller, YOLO çalışmasa bile levhaların
-        konumunu takip eder. Tracker konumu tamamen kaybederse ilgili levha bırakılır."""
         for class_name in list(self.trackers.keys()):
             info = self.trackers[class_name]
             success, box = info['tracker'].update(frame)
@@ -128,10 +123,11 @@ class SignDetectorWithNavigation(Node):
                 del self.trackers[class_name]
 
     def _sync_trackers_with_detections(self, resized_image, scale_x, scale_y):
-        """YOLO ile periyodik tespit yapar; yeni levhalar için tracker başlatır,
-        mevcut takipçileri tespitle düzeltir (drift önlenir), uzun süre tespit
-        edilmeyen levhaları bırakır."""
-        results = self.model(resized_image, verbose=False)
+        results = self.model(
+            resized_image,
+            imgsz=960,
+            verbose=False
+        )
 
         detected_signs = {}
         for r in results:
@@ -148,7 +144,6 @@ class SignDetectorWithNavigation(Node):
 
         for class_name, (x1, y1, x2, y2, confidence) in detected_signs.items():
             if class_name in self.trackers:
-                # Zaten takip ediliyor: tracker'ı tespitle yeniden hizala (drift düzeltme)
                 info = self.trackers[class_name]
                 info['tracker'] = self._create_cv_tracker()
                 info['tracker'].init(self.annotated_image, (x1, y1, x2 - x1, y2 - y1))
@@ -156,7 +151,6 @@ class SignDetectorWithNavigation(Node):
                 info['confidence'] = confidence
                 info['missed_detections'] = 0
             else:
-                # Yeni levha: yeni tracker başlat
                 tracker = self._create_cv_tracker()
                 tracker.init(self.annotated_image, (x1, y1, x2 - x1, y2 - y1))
                 self.trackers[class_name] = {
@@ -167,7 +161,6 @@ class SignDetectorWithNavigation(Node):
                 }
                 self.get_logger().info(f"Yeni levha takibe alındı: {class_name}")
 
-        # Bu turda YOLO ile tekrar tespit edilmeyen takipçiler için sayaç arttır
         for class_name in list(self.trackers.keys()):
             if class_name not in detected_signs:
                 self.trackers[class_name]['missed_detections'] += 1
@@ -176,9 +169,7 @@ class SignDetectorWithNavigation(Node):
                     del self.trackers[class_name]
 
     def transform_to_map_frame(self, x, y, z, source_frame="camera_link"):
-        """Transform coordinates from camera frame to map frame"""
         try:
-            # Create a pose in the camera frame
             pose_stamped = PoseStamped()
             pose_stamped.header.frame_id = source_frame
             pose_stamped.header.stamp = self.get_clock().now().to_msg()
@@ -187,34 +178,29 @@ class SignDetectorWithNavigation(Node):
             pose_stamped.pose.position.z = float(z)
             pose_stamped.pose.orientation.w = 1.0
 
-            # Transform to map frame
             transform = self.tf_buffer.lookup_transform('map', source_frame, rclpy.time.Time())
             transformed_pose = do_transform_pose(pose_stamped.pose, transform)
-            
+
             return transformed_pose.position.x - 3.0, transformed_pose.position.y, transformed_pose.position.z
-        
+
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             self.get_logger().warn(f"Transform failed: {e}")
             return None, None, None
 
     def navigate_to_parking_sign(self, map_x, map_y):
-        """Navigate to parking sign location using the same format as your example"""
-        # Create goal dictionary in the same format as your example
         goal = {
-            'x': map_x ,  # Stop 1m before the parking sign
+            'x': map_x,
             'y': map_y,
             'z': 0.0,
             'ox': 0.0,
             'oy': 0.0,
             'oz': 0.0,
-            'ow': 1.0  # Facing forward
+            'ow': 1.0
         }
-        
         self.get_logger().info(f"Navigating to parking sign at: ({map_x:.2f}, {map_y:.2f})")
         self.send_goal(goal)
 
     def send_goal(self, goal):
-        """Send navigation goal using the same pattern as your example"""
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose.header.frame_id = 'map'
         goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
@@ -234,52 +220,52 @@ class SignDetectorWithNavigation(Node):
         self._send_goal_future.add_done_callback(self.goal_response_callback)
 
     def feedback_callback(self, feedback_msg):
-        """Handle navigation feedback"""
         pass
 
     def goal_response_callback(self, future):
-        """Handle goal response using the same pattern as your example"""
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().info('Navigation goal rejected :(')
             return
-
         self.get_logger().info('Navigation goal accepted.')
-        
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
 
     def get_result_callback(self, future):
-        """Handle navigation result and shutdown after completion"""
         result = future.result()
         self.get_logger().info('Navigation to parking sign completed! Shutting down...')
-        
-        # Kodu kapat
         cv2.destroyAllWindows()
         rclpy.shutdown()
 
     def color_image_callback(self, msg):
-        # Eğer hedef konum zaten gönderilmişse, işlemeyi durdur
         if self.navigation_sent:
             return
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
             cv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR)
+
             self.annotated_image = cv_image
 
-            # 1) Her karede: mevcut takipçileri güncelle (YOLO çalışmasa bile levha kaybolmaz)
             if self.trackers:
                 self._update_trackers(cv_image)
 
-            # 2) Belirli aralıklarla: YOLO ile yeni levha ara / mevcut takipçileri doğrula-düzelt
             now = time.time()
             if now - self.last_detection_time >= self.detection_interval:
                 self.last_detection_time = now
-                resized_image = cv2.resize(cv_image, (640, 360))
-                scale_x = cv_image.shape[1] / 640
-                scale_y = cv_image.shape[0] / 360
-                self._sync_trackers_with_detections(resized_image, scale_x, scale_y)
+
+               # Görüntü küçültülmüyor.
+                # ZED'den gelen gerçek çözünürlük korunuyor.
+                resized_image = cv_image
+
+                scale_x = 1.0
+                scale_y = 1.0
+
+                self._sync_trackers_with_detections(
+                    resized_image,
+                    scale_x,
+                    scale_y
+                )
 
             sign_data = {}
             parking_sign_detected = False
@@ -290,7 +276,6 @@ class SignDetectorWithNavigation(Node):
                 center_x = (x1 + x2) // 2
                 center_y = (y1 + y2) // 2
 
-                # Tek pointcloud sorgusu: hem mesafe hem (gerekirse) konum için kullanılır
                 camera_x, camera_y, camera_z = self.get_point_from_pointcloud(center_x, center_y)
                 if camera_x is not None:
                     distance = math.sqrt(camera_x**2 + camera_y**2 + camera_z**2)
@@ -299,35 +284,36 @@ class SignDetectorWithNavigation(Node):
 
                 if distance < 0.7 or distance > 25.0:
                     continue
+                
+                self.get_logger().info(
+                    f"Tespit: {class_name} | Mesafe: {distance:.2f}m | Güven: {confidence:.2f}"
+                )
 
                 self._draw_box(x1, y1, x2, y2, class_name, distance, confidence)
                 sign_data[class_name] = round(distance, 2)
 
-                # Park levhası tespit edildi mi kontrol et
-                if "park" in class_name.lower() or "durak" in class_name.lower():
+                if class_name.lower() == "park":
                     parking_sign_detected = True
-
                     if camera_x is not None:
                         map_x, map_y, map_z = self.transform_to_map_frame(camera_x, camera_y, camera_z)
                         if map_x is not None:
                             self.last_parking_coordinates = (map_x, map_y)
 
                 if class_name.lower() == "kirmizi":
-                    if distance <= 7.0:
+                    if distance <= 50.0:
                         publish_data = {class_name: round(distance, 2)}
                         msg = String()
                         msg.data = json.dumps(publish_data)
                         self.sign_publisher.publish(msg)
                         self.get_logger().info(f"Published (kirmizi levha): {msg.data}")
-                    
-                if (class_name.lower() == "durak" and distance <= 12.0) or (class_name.lower() != "durak" and distance <= 7.0):
+
+                if (class_name.lower() == "durak" and distance <= 50.0) or (class_name.lower() != "durak" and distance <= 50.0):
                     publish_data = {class_name: round(distance, 2)}
                     msg = String()
                     msg.data = json.dumps(publish_data)
                     self.sign_publisher.publish(msg)
                     self.get_logger().info(f"Published: {msg.data}")
 
-            # Park levhası tespit kontrolü (sayaç yok, ilk geçerli tespitte navigasyon gönderilir)
             if parking_sign_detected and not self.navigation_sent:
                 if self.last_parking_coordinates is not None:
                     self.get_logger().info("Parking sign detected! Sending navigation goal...")
