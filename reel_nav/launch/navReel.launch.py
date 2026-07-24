@@ -86,75 +86,6 @@ def generate_launch_description():
     doc = xacro.parse(open(sdf_path))
     xacro.process_doc(doc)
 
-    # ============================================================
-    # GNOME TERMINAL YENİ SEKME FONKSİYONU
-    # ============================================================
-
-    def gnome_tab(title, command):
-
-        full_command = (
-            'source /opt/ros/humble/setup.bash && '
-            f'source "{workspace_setup}" && '
-            f'{command}'
-        )
-
-        return ExecuteProcess(
-            cmd=[
-                'gnome-terminal',
-                '--tab',
-                '-t',
-                title,
-                '--',
-                'bash',
-                '-c',
-                f'{full_command}; exec bash'
-            ],
-            output='screen'
-        )
-
-    # ============================================================
-    # TERMİNAL SEKMELERİNDE ÇALIŞACAK KOMUTLAR
-    # ============================================================
-
-    # 1. AKS
-    aks = gnome_tab(
-        'AKS',
-        'ros2 run reel_evata Aks'
-    )
-
-    # 2. MICROSTRAIN IMU
-    microstrain = gnome_tab(
-        'MICROSTRAIN IMU',
-        'ros2 launch microstrain_inertial_driver microstrain_launch.py'
-    )
-
-    # 3. RSLIDAR
-    rslidar = gnome_tab(
-        'RSLIDAR',
-        'ros2 launch rslidar_sdk start.py'
-    )
-
-    # 4. LIO-SAM
-    lio_sam = gnome_tab(
-        'LIO-SAM',
-        'ros2 launch lio_sam run.launch.py rviz:=false'
-    )
-
-    # 5. LIDAR LOCALIZATION
-    lidar_localization = gnome_tab(
-        'LIDAR LOCALIZATION',
-        'ros2 launch lidar_localization_ros2 '
-        'lidar_localization.launch.py'
-    )
-
-    return LaunchDescription([
-
-        DeclareLaunchArgument(
-            'use_sim_time',
-            default_value='false',
-            description='Use simulation clock if true'
-        ),
-
         DeclareLaunchArgument(
             'map',
             default_value=os.path.join(
@@ -179,43 +110,7 @@ def generate_launch_description():
             description='Full path to param file to load'
         ),
 
-        # ============================================================
-        # TERMİNAL SEKMELERİNİ SIRASIYLA AÇ
-        # ============================================================
 
-        # 1. AKS hemen açılır
-        aks,
-
-        # 2. Microstrain 
-        TimerAction(
-            period=0.1,
-            actions=[
-                microstrain
-            ]
-        ),
-
-        TimerAction(
-            period=0.2,
-            actions=[
-                rslidar
-            ]
-        ),
-
-        # 4. LIO-SAM 
-        TimerAction(
-            period=0.3,
-            actions=[
-                lio_sam
-            ]
-        ),
-
-        # 5. Lidar localization 
-        TimerAction(
-            period=0.4,
-            actions=[
-                lidar_localization
-            ]
-        ),
 
         # ============================================================
         # SABİT DÖNÜŞLER
@@ -293,14 +188,14 @@ def generate_launch_description():
                     'use_sim_time': use_sim_time,
                     'target_frame': 'base_footprint',
                     'transform_tolerance': 0.10,
-                    'min_height': -0.85,
-                    'max_height': 1.00,
+                    'min_height': -0.05,
+                    'max_height': 1.80,
                     'angle_min': -3.141592653589793,
                     'angle_max': 3.141592653589793,
                     'angle_increment': 0.008726646259972,
                     'scan_time': 0.105,
-                    'range_min': 0.0,
-                    'range_max': 30.0,
+                    'range_min': 0.50,
+                    'range_max': 12.0,
                     'use_inf': True
                 }
             ],
