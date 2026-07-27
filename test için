@@ -1,0 +1,16 @@
+ros2 bag record \
+-o ekf_sensor_test_$(date +%Y%m%d_%H%M%S) \
+/teker \
+/lio_sam/odometry/imu \
+/imu/data \
+/imu/data_raw \
+/gps \
+/odometry/gps \
+/pcl_pose \
+/odom \
+/odometry/filtered \
+/odometry/local \
+/odometry/global \
+/tf \
+/tf_static \
+/diagnostics
