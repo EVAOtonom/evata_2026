@@ -1,0 +1,31 @@
+/**:
+  pointcloud_crop_box:
+    ros__parameters:
+      target_frame: base_footprint
+
+      crop_boxes_names: ["robot_box"]
+
+      crop_boxes:
+        robot_box:
+          # Araç uzunluğu: 2.55 m
+          # Yarım uzunluk: 1.275 m
+          # Önde ve arkada 0.05 m güvenlik payı
+          min_x: -1.5
+          max_x: 1.5
+
+          # Araç genişliği: 1.40 m
+          # Yarım genişlik: 0.70 m
+          # Sağda ve solda 0.05 m güvenlik payı
+          min_y: -2.75
+          max_y: 2.75
+
+          # Araç yüksekliği verilmediği için korundu
+          min_z: -3.25
+          max_z: 2.50
+
+      # Kutunun içindeki araca ait noktaları siler
+      negative: true
+
+      message_type: pointcloud
+      input_topic: /rslidar_points
+      output_topic: /cropped_rslidar_points
