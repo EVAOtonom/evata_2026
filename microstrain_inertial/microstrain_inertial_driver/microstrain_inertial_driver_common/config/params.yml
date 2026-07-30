@@ -140,7 +140,7 @@ use_enu_frame : True
 #     For all other models - in the IMU frame wrt IMU origin (meters)
 # Note: Make this as accurate as possible for good performance
 gnss1_antenna_offset_source : 1
-gnss1_antenna_offset        : [0.0, -0.7, -1.0]
+gnss1_antenna_offset        : [0.0, 0.0, 0.20]
 
 
 # ****************************************************************** 
@@ -335,7 +335,7 @@ filter_speed_lever_arm : [0.0, 0.5, -1.0]
 # (All, except GQ7, CV7, -10, and -15 products) Heading Source 0 = None, 1 = magnetic, 2 = GNSS velocity (note: see manual for limitations)  
 # Note: For the GQ7, this setting has no effect. See filter_auto_heading_alignment_selector
 # Note: When using a -10/-AR product. This MUST be set to 0 or the node will not start
-filter_heading_source : 1
+filter_heading_source : 0
 
 # (GX5 and previous,-45 models only) Dynamics Mode 1 = Portable (default), 2 = Automotive, 3 = Airborne (<2Gs), 4 = Airborne High G (<4Gs)
 filter_dynamics_mode : 2
@@ -449,7 +449,7 @@ accel_low_pass_filter_enable    : False
 accel_low_pass_filter_auto      : False
 accel_low_pass_filter_frequency : 1
 
-gyro_low_pass_filter_enable    : False
+gyro_low_pass_filter_enable    : True
 gyro_low_pass_filter_auto      : False
 gyro_low_pass_filter_frequency : 1
 
@@ -469,7 +469,7 @@ pressure_low_pass_filter_frequency : 1
 
 # The speed at which the individual IMU publishers will publish at.
 imu_data_raw_rate         : 1    # Rate of imu/data_raw topic
-imu_data_rate             : 100  # Rate of imu/data topic
+imu_data_rate             : 500  # Rate of imu/data topic
 imu_mag_data_rate         : 0    # Rate of imu/mag topic
 imu_pressure_data_rate    : 0    # Rate of imu/pressure topic
 imu_wheel_speed_data_rate : 0    # Rate of imu/wheel_Speed topic
