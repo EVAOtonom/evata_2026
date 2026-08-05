@@ -86,6 +86,9 @@ def generate_launch_description():
     doc = xacro.parse(open(sdf_path))
     xacro.process_doc(doc)
 
+
+    return LaunchDescription([
+
         DeclareLaunchArgument(
             'map',
             default_value=os.path.join(

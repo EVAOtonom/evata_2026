@@ -184,29 +184,29 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 8.0  # Changed from 10.0 to 8.0 for lower local costmap CPU usage while maintaining responsiveness
-      publish_frequency: 8.0  # Changed from 10.0 to 8.0 to reduce publishing overhead
+      update_frequency: 5.0
+      publish_frequency: 5.0
       global_frame: odom
       robot_base_frame: base_footprint
       use_sim_time: False
       rolling_window: true
-      width: 12
-      height: 12
+      width: 20
+      height: 20
       resolution: 0.1
       footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.0
-        inflation_radius: 3.0
+        cost_scaling_factor: 1.2
+        inflation_radius: 1.5
         always_send_full_costmap: False
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
-        publish_voxel_map: False  # Changed from True to False to eliminate voxel visualization overhead
+        publish_voxel_map: False
         origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16  # Changed from 16 to 8 to reduce voxel memory and update cost
+        z_resolution: 0.1
+        z_voxels: 20
         max_obstacle_height: 0.3
         mark_threshold: 0
         observation_sources: scan lane_pointcloud sign_obstacles
@@ -216,10 +216,12 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 7.0
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 7.5
+          obstacle_max_range: 14.5
           obstacle_min_range: 0.0
+          observation_persistence: 6.0
+
 
         lane_pointcloud:
           topic: /lane_pointcloud
@@ -227,11 +229,11 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 10.0
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 10.5
+          obstacle_max_range: 15.5
           obstacle_min_range: 0.0
-          observation_persistence: 3.0
+          observation_persistence: 20.0
 
         sign_obstacles:
           topic: /sign_obstacles
@@ -239,24 +241,23 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 30.0  # Changed from 50.0 to 30.0 to reduce long-range obstacle processing load
+          raytrace_max_range: 50.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 30.0  # Changed from 50.0 to 30.0 to reduce costmap update workload
-          obstacle_min_range: 0.0
+          obstacle_max_range: 50.0
+          obstacle_min_range: 0.0          
 
 global_costmap:
   global_costmap:
     ros__parameters:
-      always_send_full_costmap: True    
-      update_frequency: 1.0
-      publish_frequency: 1.0
+      update_frequency: 5.0
+      publish_frequency: 5.0
       global_frame: map
       robot_base_frame: base_footprint
       use_sim_time: False
       footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
       resolution: 0.1
       track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "right_side_bias_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -267,10 +268,11 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 10.0
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 10.5
+          obstacle_max_range: 14.5
           obstacle_min_range: 0.0
+          observation_persistence: 6.0
 
         lane_pointcloud:
           topic: /lane_pointcloud
@@ -278,11 +280,11 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 3.0
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 3.5
+          obstacle_max_range: 15.5
           obstacle_min_range: 0.0
-          observation_persistence: 3.0
+          observation_persistence: 20.0
 
         sign_obstacles_global:
           topic: /sign_obstacles_global
@@ -297,26 +299,11 @@ global_costmap:
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
-
-      right_side_bias_layer:
-        plugin: "right_side_bias_layer::RightSideBiasLayer"
-        enabled: True
-        csv_path: "/home/otonom/real_ws/install/right_side_bias_layer/share/right_side_bias_layer/config/centerline.csv"
-        invert_side: False
-        influence_distance: 3.0
-        preferred_right_offset: 1.5
-        right_sigma: 0.75
-        center_cost: 70.0
-        left_gain: 170.0
-        left_sigma: 1.2
-        minimum_cost: 0
-        maximum_cost: 230
-
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.0
-        inflation_radius: 3.0
-
+        cost_scaling_factor: 1.2
+        inflation_radius: 1.5
+        always_send_full_costmap: False
 
 map_server:
   ros__parameters:
@@ -337,27 +324,32 @@ planner_server:
     use_sim_time: False
     GridBased:
       plugin: "nav2_smac_planner/SmacPlannerHybrid"
-      downsample_costmap: true  # Changed from false to true to reduce planner search space and CPU load
-      downsampling_factor: 2  # Changed from 1 to 2 to reduce planning computation cost
+      downsample_costmap: false
+      downsampling_factor: 1
       tolerance: 0.5
       allow_unknown: true
       max_iterations: -1
       max_on_approach_iterations: 10
       max_planning_time: 10.0
       motion_model_for_search: "DUBIN"
-      angle_quantization_bins: 36  # Changed from 72 to 36 to reduce Hybrid-A* state expansion cost
+      angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5
       analytic_expansion_max_length: 3.0
       analytic_expansion_max_cost: 200.0
       analytic_expansion_max_cost_override: false
-      minimum_turning_radius: 1.5
+      minimum_turning_radius: 1.5   # Dogrulandi: wheelbase=1.0m ile gercek max tekerlek acisi ~21.8 dereceye denk gelir
       reverse_penalty: 31.0
       change_penalty: 0.0
+      # 1.0 -> 1.3: Hybrid A*'in duz-degil (donen) hareket primitiflerine biraz daha
+      # fazla maliyet vermesini sagliyor. Bu, path'in gereksiz yere zigzag/mikro-donus
+      # yapmasini azaltir (daha az "sarsinti"), ama minimum_turning_radius ayri bir
+      # sert kisit oldugu icin gercekten gereken keskin donuslerde path yine dogru
+      # yaricapi kullanir - bu param sadece "gereksiz" donusleri cezalandirir.
       non_straight_penalty: 5.0
       cost_penalty: 5.0
       retrospective_penalty: 0.015
       lookup_table_size: 20.0
-      cache_obstacle_heuristic: true  # Changed from false to true to accelerate repeated replanning operations
+      cache_obstacle_heuristic: false
       debug_visualizations: false
       use_quadratic_cost_penalty: false
       downsample_obstacle_heuristic: true

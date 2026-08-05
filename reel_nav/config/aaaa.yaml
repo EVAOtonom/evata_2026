@@ -126,7 +126,7 @@ controller_server:
     use_sim_time: False
     controller_frequency: 30.0
     goal_checker_plugins: ["general_goal_checker"]
-    use_collision_checker: true
+    use_collision_checker: false
     progress_checker.movement_time_allowance: 50.0
     progress_checker.required_movement_radius: 0.001
     general_goal_checker:
@@ -135,91 +135,145 @@ controller_server:
       yaw_goal_tolerance: 0.7
       stateful: True
     FollowPath:
-      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      # ---- Temel hiz limitleri (cmd_vel.py'deki max_velocity=0.8 ve
-      # angular_z_max/min=+-0.35 ile TUTARLI tutuldu; RPP'nin ciktisi zaten
-      # cmd_vel_subscriber icinde tekrar clamp'leniyor, bu yuzden burada asiri
-      # gitmeye gerek yok - araci gercekten surecek guvenli tavan secildi) ----
-      desired_linear_vel: 0.6
-      min_approach_linear_velocity: 0.1
-      approach_velocity_scaling_dist: 1.0
-      max_allowed_time_to_collision_up_to_carrot: 1.0
-      use_collision_detection: true
-
-      # ---- Lookahead (carrot) ayari ----
-      lookahead_dist: 0.6
-      min_lookahead_dist: 0.3
-      max_lookahead_dist: 1.2
-      lookahead_time: 1.2
-      use_velocity_scaled_lookahead_dist: true
-      use_fixed_curvature_lookahead: false
-      curvature_lookahead_dist: 0.6
-      use_interpolation: true
-      max_robot_pose_search_dist: 5.0
-
-      # ---- Ackermann araç: yerinde donus yok, keskin donuslerde hiz kismasi RPP'nin
-      # kendi mekanizmasiyla (regulated scaling) yapiliyor, ekstra
-      # AckermannConstraints yok cunku RPP bunu desteklemiyor; fiziksel donus yaricapi
-      # limiti planner_server.minimum_turning_radius (1.5 m) ile zaten garanti altinda,
-      # regulated_linear_scaling_min_radius da ayni degerle eslendi. ----
-      use_rotate_to_heading: false
-      rotate_to_heading_angular_vel: 1.0
-      rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 1.5
-
-      use_regulated_linear_velocity_scaling: true
-      regulated_linear_scaling_min_radius: 1.5
-      regulated_linear_scaling_min_speed: 0.25
-
-      # ---- Costmap'e gore ek hiz kismasi: kapalı, cunku CostCritic zaten
-      # controller_server seviyesinde yok (RPP ayri calisir); acmak istersen
-      # true yapip cost_scaling_dist/gain degerlerini ayarla. ----
-      use_cost_regulated_linear_velocity_scaling: false
-      cost_scaling_dist: 0.3
-      cost_scaling_gain: 1.0
-      inflation_cost_scaling_factor: 1.2
-
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 64
+      model_dt: 0.05
+      batch_size: 2000
+      vx_max: 0.7
+      vx_min: -0.2
+      vx_std: 0.2
+      # 0.15 -> 0.25: MPPI'nin ornekleme (sampling) sirasinda daha genis bir
+      # angular.z araligini denemesini saglar. Dusuk std, orneklerin ortalama
+      # etrafinda cok siki kumelenmesine ve path keskin donse bile "tam kilide"
+      # yakin trajectory'lerin yeterince test edilmemesine yol aciyordu - bu da
+      # dönüşlerde "cekingen" (dusuk angular.z) davranisin bir nedeniydi.
+      wz_std: 0.15
+      wz_max: 0.40
+      iteration_count: 10
+      prune_distance: 1.7
       transform_tolerance: 0.5
+      motion_model: "Ackermann"
+      visualize: false
+      AckermannConstraints:
+        min_turning_r: 1.5
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic", "TwirlingCritic"]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        # 4.0 -> 5.0: Orneklenen trajectory'lerin fiziksel limitlerin (vx/wz max-min)
+        # disina cikan kisimlarini daha sikinabir cezalandirir. Bu, agirlikli
+        # ortalamaya (weighted average) fiziksel olarak "asiri" trajectory'lerin
+        # karismasini azaltir - sonuc: daha az cycle-to-cycle sarsinti (jitter).
+        cost_weight: 5.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        # 5.0 -> 6.0: Ileri yonlu hareketi biraz daha fazla tercih ettirir, gereksiz
+        # yanal savrulma/telas hareketlerini azaltir - genel surus stabilitesine katkida bulunur.
+        cost_weight: 6.0
+        threshold_to_consider: 0.5
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 20.0
+        critical_cost: 150.0
+        consider_footprint: true
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+        trajectory_point_step: 2
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 12.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 1.5
+        offset_from_furthest: 8
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 10.0
+        # 3 -> 5: Path uzerinde daha ileriye bakarak hizalanmayi hedefler. Bu,
+        # donuse "gelmeden once" tepki verilmesini (öngörülü/anticipatory steering)
+        # saglar - son anda sert duzeltme yerine erken ve yumusak giris.
+        offset_from_furthest: 5
+        threshold_to_consider: 1.5
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 6.0
+        # 4 -> 6: Daha ileri bir path noktasinin yon farkina bakar (öngörülü).
+        offset_from_furthest: 6
+        threshold_to_consider: 0.5
+        # 0.6 -> 0.9 rad (~34° -> ~52°): Onceki deger, ileride gercekten keskin
+        # bir donus varsa bile aci farkini "gereginden az onemli" gosteriyordu,
+        # bu da MPPI'nin donuse erken ve kararli girmek yerine gecikmeli/cekingen
+        # tepki vermesine katkida bulunuyordu.
+        max_angle_to_furthest: 0.9
+        mode: 0
+      TwirlingCritic:
+        enabled: true
+        twirling_cost_power: 1
+        # 40 idi: diğer TÜM kritiklerden (en yükseği CostCritic=20) çok daha baskındı.
+        # MPPI, "dönme" hareketini bu kadar ağır cezalandırınca, path sert dönse bile
+        # kontrolcü düşük angular.z ile "idare etmeyi" tercih ediyordu (full-sağa
+        # planlanan rotada bile cmd_vel'in düşük gelmesinin asıl sebebi buydu).
+        # 8.0: hâlâ gereksiz sağa-sola sallanmayı (twirling/oscillation) engeller,
+        # ama path gerçekten keskin döndüğünde MPPI'nin buna uyum sağlamasına izin verir.
+        twirling_cost_weight: 8.0
 
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 8.0  # Changed from 10.0 to 8.0 for lower local costmap CPU usage while maintaining responsiveness
-      publish_frequency: 8.0  # Changed from 10.0 to 8.0 to reduce publishing overhead
+      update_frequency: 15.0
+      publish_frequency: 15.0
       global_frame: odom
       robot_base_frame: base_footprint
       use_sim_time: False
       rolling_window: true
-      width: 12
+      width: 20
       height: 12
-      resolution: 0.1
+      resolution: 0.05
       footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.0
-        inflation_radius: 3.0
+        cost_scaling_factor: 1.2
+        inflation_radius: 1.5
         always_send_full_costmap: False
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
-        publish_voxel_map: False  # Changed from True to False to eliminate voxel visualization overhead
+        publish_voxel_map: True
         origin_z: 0.0
         z_resolution: 0.05
-        z_voxels: 16  # Changed from 16 to 8 to reduce voxel memory and update cost
+        z_voxels: 16
         max_obstacle_height: 0.3
         mark_threshold: 0
-        observation_sources: scan lane_pointcloud sign_obstacles
+        observation_sources: scan lane_pointcloud
         scan:
-          topic: /rslidar_points
+          topic: /akif
           max_obstacle_height: 0.3
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 7.0
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 7.5
+          obstacle_max_range: 14.5
           obstacle_min_range: 0.0
+          observation_persistence: 3.0
+
 
         lane_pointcloud:
           topic: /lane_pointcloud
@@ -227,50 +281,39 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 10.0
+          raytrace_max_range: 150.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 10.5
+          obstacle_max_range: 150.5
           obstacle_min_range: 0.0
-          observation_persistence: 3.0
-
-        sign_obstacles:
-          topic: /sign_obstacles
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "PointCloud2"
-          raytrace_max_range: 30.0  # Changed from 50.0 to 30.0 to reduce long-range obstacle processing load
-          raytrace_min_range: 0.0
-          obstacle_max_range: 30.0  # Changed from 50.0 to 30.0 to reduce costmap update workload
-          obstacle_min_range: 0.0
+          observation_persistence: 20.0
 
 global_costmap:
   global_costmap:
     ros__parameters:
-      always_send_full_costmap: True    
-      update_frequency: 1.0
-      publish_frequency: 1.0
+      update_frequency: 15.0
+      publish_frequency: 15.0
       global_frame: map
       robot_base_frame: base_footprint
       use_sim_time: False
       footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
-      resolution: 0.1
+      resolution: 0.05
       track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "right_side_bias_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: scan lane_pointcloud sign_obstacles_global
+        observation_sources: scan lane_pointcloud
         scan:
-          topic: /rslidar_points
+          topic: /akif
           max_obstacle_height: 0.3
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 10.0
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 10.5
+          obstacle_max_range: 14.5
           obstacle_min_range: 0.0
+          observation_persistence: 3.0
 
         lane_pointcloud:
           topic: /lane_pointcloud
@@ -278,45 +321,19 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 3.0
+          raytrace_max_range: 150.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 3.5
+          obstacle_max_range: 150.5
           obstacle_min_range: 0.0
-          observation_persistence: 3.0
-
-        sign_obstacles_global:
-          topic: /sign_obstacles_global
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "PointCloud2"
-          raytrace_max_range: 50.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 50.0
-          obstacle_min_range: 0.0
+          observation_persistence: 20.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
-
-      right_side_bias_layer:
-        plugin: "right_side_bias_layer::RightSideBiasLayer"
-        enabled: True
-        csv_path: "/home/otonom/real_ws/install/right_side_bias_layer/share/right_side_bias_layer/config/centerline.csv"
-        invert_side: False
-        influence_distance: 3.0
-        preferred_right_offset: 1.5
-        right_sigma: 0.75
-        center_cost: 70.0
-        left_gain: 170.0
-        left_sigma: 1.2
-        minimum_cost: 0
-        maximum_cost: 230
-
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.0
-        inflation_radius: 3.0
-
+        cost_scaling_factor: 1.2
+        inflation_radius: 1.5
+        always_send_full_costmap: False
 
 map_server:
   ros__parameters:
@@ -337,27 +354,32 @@ planner_server:
     use_sim_time: False
     GridBased:
       plugin: "nav2_smac_planner/SmacPlannerHybrid"
-      downsample_costmap: true  # Changed from false to true to reduce planner search space and CPU load
-      downsampling_factor: 2  # Changed from 1 to 2 to reduce planning computation cost
+      downsample_costmap: false
+      downsampling_factor: 1
       tolerance: 0.5
       allow_unknown: true
       max_iterations: -1
       max_on_approach_iterations: 10
       max_planning_time: 10.0
       motion_model_for_search: "DUBIN"
-      angle_quantization_bins: 36  # Changed from 72 to 36 to reduce Hybrid-A* state expansion cost
+      angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5
       analytic_expansion_max_length: 3.0
       analytic_expansion_max_cost: 200.0
       analytic_expansion_max_cost_override: false
-      minimum_turning_radius: 1.5
+      minimum_turning_radius: 1.5   # Dogrulandi: wheelbase=1.0m ile gercek max tekerlek acisi ~21.8 dereceye denk gelir
       reverse_penalty: 31.0
       change_penalty: 0.0
-      non_straight_penalty: 5.0
+      # 1.0 -> 1.3: Hybrid A*'in duz-degil (donen) hareket primitiflerine biraz daha
+      # fazla maliyet vermesini sagliyor. Bu, path'in gereksiz yere zigzag/mikro-donus
+      # yapmasini azaltir (daha az "sarsinti"), ama minimum_turning_radius ayri bir
+      # sert kisit oldugu icin gercekten gereken keskin donuslerde path yine dogru
+      # yaricapi kullanir - bu param sadece "gereksiz" donusleri cezalandirir.
+      non_straight_penalty: 1.3
       cost_penalty: 5.0
       retrospective_penalty: 0.015
       lookup_table_size: 20.0
-      cache_obstacle_heuristic: true  # Changed from false to true to accelerate repeated replanning operations
+      cache_obstacle_heuristic: false
       debug_visualizations: false
       use_quadratic_cost_penalty: false
       downsample_obstacle_heuristic: true

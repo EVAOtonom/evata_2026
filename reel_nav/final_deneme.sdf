@@ -171,7 +171,7 @@
     </link>
 
     <joint name="zed_camera_joint" type="fixed">
-      <pose>0 0 1.01 0 0 0</pose>
+      <pose>0.5 0 1.15 0 0.15 0.2</pose>
       <parent>base_link</parent>
       <child>zed_camera_link</child>
     </joint>
@@ -212,7 +212,7 @@
     <joint name="rslidar_joint" type="fixed">
       <parent>base_link</parent>
       <child>rslidar</child>
-      <pose>-0.45 0 0 0 0.0523 0</pose>
+      <pose>-0.45 0 0.65 0 0.0523 0</pose>
     </joint>
 
     <link name="imu_link">

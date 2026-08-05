@@ -32,9 +32,9 @@ ekf_local:
 
     # /teker'den yalnızca x ve y.
     odom0_config: [
-      true,  true,  false,
+      false, false ,  false,
       false, false, false,
-      false, false, false,
+      true, false, false,
       false, false, false,
       false, false, false
     ]
@@ -56,14 +56,14 @@ ekf_local:
     # /teker zaten x-y verdiği için LIO-SAM x-y değerleri
     # ikinci kez eklenmiyor.
     odom1_config: [
-      true, true, false,
+      false, false, false,
       false, false, true,
       false, false, false,
       false, false, false,
       false, false, false
     ]
 
-    odom1_queue_size: 100
+    odom1_queue_size: 200
     odom1_nodelay: true
     odom1_differential: false
     odom1_relative: true
@@ -134,6 +134,7 @@ ekf_global:
     odom0_nodelay: false
     odom0_differential: true
     odom0_relative: false
+
 
     # ============================================================
     # ODOM1 — NAVSAT GPS ODOMETRİSİ
@@ -215,12 +216,6 @@ ekf_global:
       0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
       0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0
     ]
-
-
-    # ============================================================
-    # PCL LOKALİZASYON POZU
-    # ============================================================
-
     pose0: /pcl_pose
 
     # PCL'den mutlak map x, y ve yaw
@@ -266,5 +261,7 @@ navsat_transform_node:
     use_odometry_yaw: false
 
     wait_for_datum: true
-    #datum: [41.0569538, 28.8204359, 0.0]  bahce
-    datum: [41.056458, 28.820518, 116.291259]
+    #datum: [41.0569538, 28.8204359, 0.0]  #bahce
+    #datum: [41.056458, 28.820518, 116.291259] # otopark
+    #datum: [41.05923415, 28.81977766, 101.54] # stadyum
+    datum: [41.0591882, 28.8205085, 105.054]
