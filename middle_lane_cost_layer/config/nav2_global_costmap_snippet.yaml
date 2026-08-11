@@ -1,0 +1,38 @@
+# Mevcut global_costmap bölümüne uyarlayın.
+# Önemli: middle_lane_cost_layer'ı inflation_layer'dan SONRA koyuyoruz.
+# Böylece yalnızca CSV'deki orta şerit bandı yüksek cost alır.
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      plugins:
+        - static_layer
+        - obstacle_layer
+        - inflation_layer
+        - middle_lane_cost_layer
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        # Mevcut observation_sources ayarlarınızı burada koruyun.
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 1.5
+        inflation_radius: 1.5
+
+      middle_lane_cost_layer:
+        plugin: "middle_lane_cost_layer::MiddleLaneCostLayer"
+        enabled: true
+        csv_path: "/home/otonom/ros2_ws/install/middle_lane_cost_layer/share/middle_lane_cost_layer/config/road_segments_50_points.csv"
+
+        # Çizginin iki yanına 0.35 m => toplam 0.70 m yüksek-cost şerit.
+        lane_half_width: 0.35
+
+        # 230 = yüksek ama lethal obstacle değil.
+        # Geçilmesini daha da zorlaştırmak istersen 245-252 aralığı kullanılabilir.
+        lane_cost: 230

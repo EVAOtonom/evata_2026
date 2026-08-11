@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<library path="middle_lane_cost_layer">
+  <class
+    name="middle_lane_cost_layer::MiddleLaneCostLayer"
+    type="middle_lane_cost_layer::MiddleLaneCostLayer"
+    base_class_type="nav2_costmap_2d::Layer">
+    <description>
+      Adds a configurable high cost only on independent middle-lane line segments loaded from CSV.
+      CSV points are paired as (1,2), (3,4), (5,6), ... .
+    </description>
+  </class>
+</library>

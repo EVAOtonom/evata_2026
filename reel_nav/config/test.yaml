@@ -136,45 +136,61 @@ controller_server:
       stateful: True
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      # ---- Temel hiz limitleri (cmd_vel.py'deki max_velocity=0.8 ve
-      # angular_z_max/min=+-0.35 ile TUTARLI tutuldu; RPP'nin ciktisi zaten
-      # cmd_vel_subscriber icinde tekrar clamp'leniyor, bu yuzden burada asiri
-      # gitmeye gerek yok - araci gercekten surecek guvenli tavan secildi) ----
-      desired_linear_vel: 0.6
-      min_approach_linear_velocity: 0.1
-      approach_velocity_scaling_dist: 1.0
+
+      desired_linear_vel: 0.8
+
+      min_approach_linear_velocity: 0.08 #minumum yavaşlama hızı
+      approach_velocity_scaling_dist: 2.0 #hedefe yazan değer kadar metre geriden yavaşlamaya başlıyor
+
       max_allowed_time_to_collision_up_to_carrot: 1.0
       use_collision_detection: true
 
-      # ---- Lookahead (carrot) ayari ----
-      lookahead_dist: 0.6
-      min_lookahead_dist: 0.3
-      max_lookahead_dist: 1.2
-      lookahead_time: 1.2
+      # ==========================================
+      # LOOKAHEAD
+      # ==========================================
+
+      # Daha uzağa bak → daha yumuşak direksiyon
+      lookahead_dist: 5.0
+
+      min_lookahead_dist: 1.8
+      max_lookahead_dist: 7.0
+
+      # 0.7 m/s × 1.5 sec ~= 1.05m lookahead
+      lookahead_time: 1.0
+
       use_velocity_scaled_lookahead_dist: true
+
       use_fixed_curvature_lookahead: false
-      curvature_lookahead_dist: 0.6
+
       use_interpolation: true
+
       max_robot_pose_search_dist: 5.0
 
-      # ---- Ackermann araç: yerinde donus yok, keskin donuslerde hiz kismasi RPP'nin
-      # kendi mekanizmasiyla (regulated scaling) yapiliyor, ekstra
-      # AckermannConstraints yok cunku RPP bunu desteklemiyor; fiziksel donus yaricapi
-      # limiti planner_server.minimum_turning_radius (1.5 m) ile zaten garanti altinda,
-      # regulated_linear_scaling_min_radius da ayni degerle eslendi. ----
+      # ==========================================
+      # ACKERMANN
+      # ==========================================
+
       use_rotate_to_heading: false
+
       rotate_to_heading_angular_vel: 1.0
       rotate_to_heading_min_angle: 0.785
       max_angular_accel: 1.5
 
-      use_regulated_linear_velocity_scaling: true
-      regulated_linear_scaling_min_radius: 1.5
-      regulated_linear_scaling_min_speed: 0.25
+      # ==========================================
+      # VIRAJDA HIZ DUSUR
+      # ==========================================
 
-      # ---- Costmap'e gore ek hiz kismasi: kapalı, cunku CostCritic zaten
-      # controller_server seviyesinde yok (RPP ayri calisir); acmak istersen
-      # true yapip cost_scaling_dist/gain degerlerini ayarla. ----
+      use_regulated_linear_velocity_scaling: true
+
+      # ÖNEMLİ:
+      # fiziksel min radius 1.5 fakat RPP'nin
+      # hız düşürmeye daha erken başlamasını istiyoruz.
+      regulated_linear_scaling_min_radius: 2.5
+
+      regulated_linear_scaling_min_speed: 0.20
+
       use_cost_regulated_linear_velocity_scaling: false
+
       cost_scaling_dist: 0.3
       cost_scaling_gain: 1.0
       inflation_cost_scaling_factor: 1.2
@@ -197,8 +213,8 @@ local_costmap:
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.0
-        inflation_radius: 3.0
+        cost_scaling_factor: 1.2
+        inflation_radius: 1.5
         always_send_full_costmap: False
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
@@ -207,12 +223,12 @@ local_costmap:
         origin_z: 0.0
         z_resolution: 0.05
         z_voxels: 16  # Changed from 16 to 8 to reduce voxel memory and update cost
-        max_obstacle_height: 0.3
+        max_obstacle_height: 3.0
         mark_threshold: 0
         observation_sources: scan lane_pointcloud sign_obstacles
         scan:
           topic: /rslidar_points
-          max_obstacle_height: 0.3
+          max_obstacle_height: 3.0
           clearing: True
           marking: True
           data_type: "PointCloud2"
@@ -220,6 +236,8 @@ local_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 7.5
           obstacle_min_range: 0.0
+          observation_persistence: 6.0
+
 
         lane_pointcloud:
           topic: /lane_pointcloud
@@ -256,14 +274,14 @@ global_costmap:
       footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
       resolution: 0.1
       track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "right_side_bias_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer","middle_lane_cost_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
         observation_sources: scan lane_pointcloud sign_obstacles_global
         scan:
           topic: /rslidar_points
-          max_obstacle_height: 0.3
+          max_obstacle_height: 1.0
           clearing: True
           marking: True
           data_type: "PointCloud2"
@@ -271,6 +289,8 @@ global_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 10.5
           obstacle_min_range: 0.0
+          observation_persistence: 6.0
+
 
         lane_pointcloud:
           topic: /lane_pointcloud
@@ -294,28 +314,34 @@ global_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 50.0
           obstacle_min_range: 0.0
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 1.5
+        inflation_radius: 1.5
+
+      middle_lane_cost_layer:
+        plugin: "middle_lane_cost_layer::MiddleLaneCostLayer"
+        enabled: true
+        csv_path: "/home/otonom/real_ws/src/middle_lane_cost_layer/config/road_segments_50_points.csv"
+
+        # Çizginin iki yanına 0.35 m => toplam 0.70 m yüksek-cost şerit.
+        lane_half_width: 1.5
+
+        # 230 = yüksek ama lethal obstacle değil.
+        # Geçilmesini daha da zorlaştırmak istersen 245-252 aralığı kullanılabilir.
+        lane_cost: 200
+
+
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
 
-      right_side_bias_layer:
-        plugin: "right_side_bias_layer::RightSideBiasLayer"
-        enabled: True
-        csv_path: "/home/otonom/real_ws/install/right_side_bias_layer/share/right_side_bias_layer/config/centerline.csv"
-        invert_side: False
-        influence_distance: 3.0
-        preferred_right_offset: 1.5
-        right_sigma: 0.75
-        center_cost: 70.0
-        left_gain: 170.0
-        left_sigma: 1.2
-        minimum_cost: 0
-        maximum_cost: 230
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.0
-        inflation_radius: 3.0
+        cost_scaling_factor: 1.2
+        inflation_radius: 1.5
 
 
 map_server:
@@ -333,36 +359,112 @@ map_saver:
 
 planner_server:
   ros__parameters:
+
     planner_plugins: ["GridBased"]
     use_sim_time: False
+
     GridBased:
       plugin: "nav2_smac_planner/SmacPlannerHybrid"
-      downsample_costmap: true  # Changed from false to true to reduce planner search space and CPU load
-      downsampling_factor: 2  # Changed from 1 to 2 to reduce planning computation cost
+
+      # ==========================================
+      # PATH KALITESI
+      # ==========================================
+
+      # Önce kaliteyi görelim.
+      # 5cm costmap varsa planner yine 5cm üzerinden çalışsın.
+      downsample_costmap: false
+      downsampling_factor: 1
+
       tolerance: 0.5
       allow_unknown: true
+
       max_iterations: -1
-      max_on_approach_iterations: 10
+
+      # 2 çok düşük.
+      # Goal yakınında düzgün çözüm aramasına izin ver.
+      max_on_approach_iterations: 1000
+
       max_planning_time: 10.0
+
+      # Ackermann + sadece ileri
       motion_model_for_search: "DUBIN"
-      angle_quantization_bins: 36  # Changed from 72 to 36 to reduce Hybrid-A* state expansion cost
+
+      # ==========================================
+      # ACKERMANN DONUS GEOMETRISI
+      # ==========================================
+
+      # Fiziksel minimum dönüş yarıçapı.
+      # DOKUNMUYORUZ.
+      minimum_turning_radius: 1.4
+
+      # Ara heading / curvature seçeneklerini artır.
+      #
+      # Interpolation açıldığı için 72 yapmak yerine
+      # 32-36 civarı iyi başlangıç.
+      angle_quantization_bins: 72
+      allow_primitive_interpolation: true
+
+      # ==========================================
+      # DUZ GITME TERCIHI
+      # ==========================================
+
+      # 10.0 aşırı yüksek.
+      # Düz yolu yine tercih etsin ama viraj gerektiğinde
+      # doğal şekilde yay oluşturabilsin.
+      non_straight_penalty: 2.0
+
+      # DUBIN'de reverse zaten kullanılmaz.
+      reverse_penalty: 2.0
+
+      change_penalty: 0.50
+
+      # 5.0 biraz agresif.
+      # Costmap merkezine yapışmaya çalışıp path'i bozmasın.
+      cost_penalty: 2.0
+
+      retrospective_penalty: 0.15
+
+      # ==========================================
+      # ANALYTIC EXPANSION
+      # ==========================================
+
       analytic_expansion_ratio: 3.5
-      analytic_expansion_max_length: 3.0
+
+      # 1.5m minimum radius için 3m kısa.
+      # Nav2 dokümantasyonu 4-5 x min radius öneriyor.
+      analytic_expansion_max_length: 7.5
+
       analytic_expansion_max_cost: 200.0
       analytic_expansion_max_cost_override: false
-      minimum_turning_radius: 1.5
-      reverse_penalty: 31.0
-      change_penalty: 0.0
-      non_straight_penalty: 5.0
-      cost_penalty: 5.0
-      retrospective_penalty: 0.015
+
       lookup_table_size: 20.0
-      cache_obstacle_heuristic: true  # Changed from false to true to accelerate repeated replanning operations
+
+      cache_obstacle_heuristic: true
       debug_visualizations: false
+
       use_quadratic_cost_penalty: false
-      downsample_obstacle_heuristic: true
-      allow_primitive_interpolation: false
+      downsample_obstacle_heuristic: false
+
       goal_heading_mode: "DEFAULT"
+
+      # ==========================================
+      # PATH SMOOTHING
+      # ==========================================
+
+      smooth_path: true
+
+      smoother:
+        max_iterations: 1500
+
+        # Path'in zig-zag/köşelerini bastır.
+        w_smooth: 0.4
+
+        # Orijinal path'e bağlılık
+        w_data: 0.2
+
+        tolerance: 1.0e-10
+        do_refinement: true
+        refinement_num: 3
 
 smoother_server:
   ros__parameters:
@@ -419,7 +521,7 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.7, 0.0, 0.40]
+    max_velocity: [0.8, 0.0, 0.40]
     min_velocity: [-0.2, 0.0, -0.40]
     # max_accel/max_decel'in 3. elemani (z/angular): 0.5 -> 1.0 rad/s^2.
     # Eskisiyle 0'dan wz_max=0.35'e ulasmak ~0.7s suruyordu - MPPI "tam kirin"

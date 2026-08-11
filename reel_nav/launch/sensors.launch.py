@@ -41,7 +41,7 @@ def generate_launch_description():
     # 4. ZED2i Wrapper
     zed = gnome_tab(
         'ZED2i',
-        'ros2 launch zed_wrapper zed_camera.launch.py camera_model:=zedm camera_name:=zedm'
+        'ros2 launch zed_wrapper zed_camera.launch.py camera_model:=zed2i'
     )
 
     return LaunchDescription([

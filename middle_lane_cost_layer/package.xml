@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>middle_lane_cost_layer</name>
+  <version>1.0.0</version>
+  <description>Nav2 costmap layer that assigns high cost only to CSV-defined middle-lane segments.</description>
+
+  <maintainer email="otonom@example.com">EVA Otonom</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>pluginlib</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <nav2_costmap_2d plugin="${prefix}/middle_lane_cost_layer_plugin.xml" />
+  </export>
+</package>
