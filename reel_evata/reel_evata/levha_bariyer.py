@@ -26,8 +26,8 @@ def generate_wall_points(
     width: float,
     z_min: float = 0.0,
     z_max: float = 1.0,
-    xy_res: float = 0.10,
-    z_res: float = 0.20,
+    xy_res: float = 0.70,
+    z_res: float = 0.80,
 ) -> list:
     """
     Duvarın odom-frame'indeki nokta bulutunu döndürür.
