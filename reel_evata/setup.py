@@ -51,6 +51,7 @@ setup(
             "final2_park1=" + package_name + ".final2_park1:main",	
             "final2_park2=" + package_name + ".final2_park2:main",	
             "final2_park3=" + package_name + ".final2_park3:main",	
+            "levha_bariyer=" + package_name + ".levha_bariyer:main",	
 
 
 
