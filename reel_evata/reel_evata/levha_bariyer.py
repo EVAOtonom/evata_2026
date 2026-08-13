@@ -129,7 +129,7 @@ class SignDynamicObstacle(Node):
 
     def load_barriers(self):
         try:
-            with open("/home/dilara/ros2_ws/src/evata_sim/evata_sim/barriers.json", "r") as f:
+            with open("/home/otonom/real_ws/src/reel_evata/reel_evata/barriers.json", "r") as f:
                 data = json.load(f)
 
             self.get_logger().info(
