@@ -33,7 +33,7 @@ class SignDetectorWithNavigation(Node):
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         src_dir = dir_path.split('/install')[0]
-        model_path = os.path.join(src_dir, 'src', 'reel_evata', 'reel_evata', 'utils', 'best26.pt')
+        model_path = os.path.join(src_dir, 'src', 'reel_evata', 'reel_evata', 'utils', 'EVAbest.pt')
 
         self.model = YOLO(model_path)
         self.bridge = CvBridge()

@@ -20,8 +20,9 @@ amcl:
     ### Lazer modeli ###
     #scan_topic: scan
     laser_model_type: "likelihood_field"
-    laser_max_range: 100.0    # Gerçek lidar max menzilin   #70 yaparak da dene
-    laser_min_range: 2.0
+    # /scan_nav, pointcloud_to_laserscan tarafında 0.50-12.0 m ile sınırlandırılıyor.
+    laser_max_range: 12.0
+    laser_min_range: 0.5
     laser_likelihood_max_dist: 1.0   # 2.0’den biraz daha yüksek, çünkü uzak mesafelerde tolerans artmalı
     z_hit: 0.85                    # Güven artırıldı, lidar uzun menzilli ve temizse
     z_rand: 0.50                   # Rastgele ölçüm (gürültü) olasılığı biraz düşürüldü
@@ -58,22 +59,22 @@ amcl:
 
 bt_navigator:
   ros__parameters:
-    use_sim_time: False
-    global_frame: map
-    robot_base_frame: base_footprint
-    odom_topic: /odom
-    bt_loop_duration: 10
-    default_server_timeout: 20
+
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
       - nav2_smooth_path_action_bt_node
       - nav2_follow_path_action_bt_node
+
       - nav2_spin_action_bt_node
       - nav2_wait_action_bt_node
-      - nav2_assisted_teleop_action_bt_node
+
+      # BACKUP BT NODE
       - nav2_back_up_action_bt_node
+
+      - nav2_assisted_teleop_action_bt_node
       - nav2_drive_on_heading_bt_node
+
       - nav2_clear_costmap_service_bt_node
       - nav2_is_stuck_condition_bt_node
       - nav2_goal_reached_condition_bt_node
@@ -82,15 +83,19 @@ bt_navigator:
       - nav2_is_path_valid_condition_bt_node
       - nav2_initial_pose_received_condition_bt_node
       - nav2_reinitialize_global_localization_service_bt_node
+
       - nav2_rate_controller_bt_node
       - nav2_distance_controller_bt_node
       - nav2_speed_controller_bt_node
+
       - nav2_truncate_path_action_bt_node
       - nav2_truncate_path_local_action_bt_node
+
       - nav2_goal_updater_node_bt_node
       - nav2_recovery_node_bt_node
       - nav2_pipeline_sequence_bt_node
       - nav2_round_robin_node_bt_node
+
       - nav2_transform_available_condition_bt_node
       - nav2_time_expired_condition_bt_node
       - nav2_path_expiring_timer_condition
@@ -98,17 +103,23 @@ bt_navigator:
       - nav2_single_trigger_bt_node
       - nav2_goal_updated_controller_bt_node
       - nav2_is_battery_low_condition_bt_node
+
       - nav2_navigate_through_poses_action_bt_node
       - nav2_navigate_to_pose_action_bt_node
+
       - nav2_remove_passed_goals_action_bt_node
       - nav2_planner_selector_bt_node
       - nav2_controller_selector_bt_node
       - nav2_goal_checker_selector_bt_node
       - nav2_controller_cancel_bt_node
       - nav2_path_longer_on_approach_bt_node
+
       - nav2_wait_cancel_bt_node
       - nav2_spin_cancel_bt_node
+
+      # BACKUP CANCEL NODE
       - nav2_back_up_cancel_bt_node
+
       - nav2_assisted_teleop_cancel_bt_node
       - nav2_drive_on_heading_cancel_bt_node
       - nav2_is_battery_charging_condition_bt_node
@@ -121,26 +132,54 @@ bt_navigator_navigate_to_pose_rclcpp_node:
   ros__parameters:
     use_sim_time: False
 
+
 controller_server:
   ros__parameters:
     use_sim_time: False
     controller_frequency: 30.0
+
+    controller_plugins: ["FollowPath", "ParkFollowPath"]
+
     goal_checker_plugins: ["general_goal_checker"]
+
     use_collision_checker: true
+
     progress_checker.movement_time_allowance: 50.0
     progress_checker.required_movement_radius: 0.001
+
+
+    # ==========================================================
+    # NORMAL NAVİGASYON GOAL CHECKER
+    # ==========================================================
+
     general_goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
+
+      # Normal navigasyon için mevcut toleransların
       xy_goal_tolerance: 1.0
+
+      # 0.7 rad ≈ 40 derece
       yaw_goal_tolerance: 0.7
+
       stateful: True
+
+
+
+
+    # ==========================================================
+    # NORMAL CONTROLLER
+    # SADECE İLERİ SÜRÜŞ
+    # ==========================================================
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
 
       desired_linear_vel: 0.8
 
-      min_approach_linear_velocity: 0.08 #minumum yavaşlama hızı
-      approach_velocity_scaling_dist: 2.0 #hedefe yazan değer kadar metre geriden yavaşlamaya başlıyor
+      # Normal navigasyonda geri sürüş kapalı.
+      allow_reversing: false
+
+      min_approach_linear_velocity: 0.08
+      approach_velocity_scaling_dist: 2.0
 
       max_allowed_time_to_collision_up_to_carrot: 1.0
       use_collision_detection: true
@@ -155,8 +194,7 @@ controller_server:
       min_lookahead_dist: 1.8
       max_lookahead_dist: 7.0
 
-      # 0.7 m/s × 1.5 sec ~= 1.05m lookahead
-      lookahead_time: 1.0
+      lookahead_time: 5.0
 
       use_velocity_scaled_lookahead_dist: true
 
@@ -182,12 +220,9 @@ controller_server:
 
       use_regulated_linear_velocity_scaling: true
 
-      # ÖNEMLİ:
-      # fiziksel min radius 1.5 fakat RPP'nin
-      # hız düşürmeye daha erken başlamasını istiyoruz.
       regulated_linear_scaling_min_radius: 2.5
 
-      regulated_linear_scaling_min_speed: 0.20
+      regulated_linear_scaling_min_speed: 0.45
 
       use_cost_regulated_linear_velocity_scaling: false
 
@@ -197,151 +232,276 @@ controller_server:
 
       transform_tolerance: 0.5
 
+
+    # ==========================================================
+    # PARK CONTROLLER
+    # İLERİ + GERİ SÜRÜŞ
+    # ==========================================================
+    ParkFollowPath:
+      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+
+      # Park sırasında daha kontrollü hız.
+      desired_linear_vel: 0.50
+
+      # Sadece park.py bu controller'ı çağıracak.
+      allow_reversing: false
+      rotate_to_heading_min_angle: 0.785
+      max_angular_accel: 1.5
+
+      min_approach_linear_velocity: 0.08
+      approach_velocity_scaling_dist: 1.0
+
+      max_allowed_time_to_collision_up_to_carrot: 1.0
+      use_collision_detection: true
+
+      # ==========================================
+      # PARK LOOKAHEAD
+      # ==========================================
+
+      # Park sırasında normal sürüşe göre
+      # daha yakındaki path geometrisini takip et.
+      lookahead_dist: 1.0
+
+      min_lookahead_dist: 0.8
+      max_lookahead_dist: 1.5
+
+      lookahead_time: 1.0
+
+      use_velocity_scaled_lookahead_dist: true
+
+      use_fixed_curvature_lookahead: false
+
+      use_interpolation: true
+
+      max_robot_pose_search_dist: 5.0
+
+      # ==========================================
+      # ACKERMANN
+      # ==========================================
+
+      # Araç yerinde dönemediği için false.
+      use_rotate_to_heading: false
+
+      rotate_to_heading_angular_vel: 1.0
+      rotate_to_heading_min_angle: 0.785
+      max_angular_accel: 1.5
+
+      # ==========================================
+      # PARKTA VIRAJ HIZ KONTROLU
+      # ==========================================
+
+      use_regulated_linear_velocity_scaling: true
+
+      regulated_linear_scaling_min_radius: 5.0
+
+      regulated_linear_scaling_min_speed: 0.3
+
+      use_cost_regulated_linear_velocity_scaling: false
+
+      cost_scaling_dist: 0.3
+      cost_scaling_gain: 1.0
+      inflation_cost_scaling_factor: 1.2
+
+      transform_tolerance: 0.5
+
+
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 8.0  # Changed from 10.0 to 8.0 for lower local costmap CPU usage while maintaining responsiveness
-      publish_frequency: 8.0  # Changed from 10.0 to 8.0 to reduce publishing overhead
+      update_frequency: 8.0
+      publish_frequency: 8.0
+
       global_frame: odom
       robot_base_frame: base_footprint
+
       use_sim_time: False
+
       rolling_window: true
-      width: 12
-      height: 12
+
+      width: 16
+      height: 16
       resolution: 0.1
+
       footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
-      plugins: ["voxel_layer", "inflation_layer"]
+
+      plugins: ["obstacle_layer", "inflation_layer"]
+
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+
         cost_scaling_factor: 1.2
-        inflation_radius: 1.5
+        inflation_radius: 3.0
+
         always_send_full_costmap: False
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+
         enabled: True
-        publish_voxel_map: False  # Changed from True to False to eliminate voxel visualization overhead
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16  # Changed from 16 to 8 to reduce voxel memory and update cost
-        max_obstacle_height: 3.0
-        mark_threshold: 0
         observation_sources: scan lane_pointcloud sign_obstacles
+
+
+        # /rslidar_points -> pointcloud_to_laserscan -> /scan_nav
+        # pointcloud_to_laserscan filtresi:
+        #   height: -0.05 ... 1.80 m
+        #   range :  0.50 ... 12.0 m
         scan:
-          topic: /rslidar_points
-          max_obstacle_height: 3.0
+          topic: /scan_nav
+
           clearing: True
           marking: True
-          data_type: "PointCloud2"
+
+          data_type: "LaserScan"
+
+          # Local costmap 12x12 m ve robot merkezde olduğu için
+          # düz yönde yaklaşık 6 m kullanılabilir alan bulunuyor.
           raytrace_max_range: 7.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 7.5
-          obstacle_min_range: 0.0
+          raytrace_min_range: 1.5
+
+          # Marking menzilini clearing menzilinden biraz kısa tutuyoruz.
+          obstacle_max_range: 7.1
+          obstacle_min_range: 1.5
+
+          # pointcloud_to_laserscan use_inf=True olduğu için
+          # +inf ölçümleri boş alan temizlemede kullanılabilsin.
+          inf_is_valid: true
+
+          # Gerçek LaserScan sürekli geldiği için eski lidar ölçümünü tutma.
           observation_persistence: 6.0
 
 
         lane_pointcloud:
           topic: /lane_pointcloud
+
           max_obstacle_height: 2.0
+
           clearing: True
           marking: True
+
           data_type: "PointCloud2"
-          raytrace_max_range: 10.0
+
+          raytrace_max_range: 7.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 10.5
+
+          obstacle_max_range: 7.1
           obstacle_min_range: 0.0
+
           observation_persistence: 3.0
 
-        sign_obstacles:
-          topic: /sign_obstacles
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "PointCloud2"
-          raytrace_max_range: 30.0  # Changed from 50.0 to 30.0 to reduce long-range obstacle processing load
-          raytrace_min_range: 0.0
-          obstacle_max_range: 30.0  # Changed from 50.0 to 30.0 to reduce costmap update workload
-          obstacle_min_range: 0.0
+
 
 global_costmap:
   global_costmap:
     ros__parameters:
-      always_send_full_costmap: True    
+
+      always_send_full_costmap: True
+
       update_frequency: 1.0
       publish_frequency: 1.0
+
       global_frame: map
       robot_base_frame: base_footprint
+
       use_sim_time: False
+
       footprint: "[[1.35, 0.775], [1.35, -0.775], [-1.35, -0.775], [-1.35, 0.775]]"
+
       resolution: 0.1
+
       track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer","middle_lane_cost_layer"]
+
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer", "middle_lane_cost_layer"]
+
+
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
+
         enabled: True
+
         observation_sources: scan lane_pointcloud sign_obstacles_global
+
+
+        # /rslidar_points -> pointcloud_to_laserscan -> /scan_nav
         scan:
-          topic: /rslidar_points
-          max_obstacle_height: 1.0
+          topic: /scan_nav
+
           clearing: True
           marking: True
-          data_type: "PointCloud2"
-          raytrace_max_range: 10.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 10.5
-          obstacle_min_range: 0.0
+
+          data_type: "LaserScan"
+
+          # pointcloud_to_laserscan range_max ile aynı clearing menzili.
+          raytrace_max_range: 7.0
+          raytrace_min_range: 0.5
+
+          # Son 0.5 m yalnız clearing payı olarak bırakılıyor.
+          obstacle_max_range: 7.1
+          obstacle_min_range: 0.5
+
+          inf_is_valid: true
+
           observation_persistence: 6.0
 
 
         lane_pointcloud:
           topic: /lane_pointcloud
+
           max_obstacle_height: 2.0
+
           clearing: True
           marking: True
+
           data_type: "PointCloud2"
+
           raytrace_max_range: 3.0
           raytrace_min_range: 0.0
+
           obstacle_max_range: 3.5
           obstacle_min_range: 0.0
+
           observation_persistence: 3.0
+
 
         sign_obstacles_global:
           topic: /sign_obstacles_global
+
           max_obstacle_height: 2.0
+
           clearing: True
           marking: True
+
           data_type: "PointCloud2"
-          raytrace_max_range: 50.0
+
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 50.0
+
+          obstacle_max_range: 15.0
           obstacle_min_range: 0.0
 
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 1.5
-        inflation_radius: 1.5
 
       middle_lane_cost_layer:
         plugin: "middle_lane_cost_layer::MiddleLaneCostLayer"
+
         enabled: true
+
         csv_path: "/home/otonom/real_ws/src/middle_lane_cost_layer/config/road_segments_50_points.csv"
 
-        # Çizginin iki yanına 0.35 m => toplam 0.70 m yüksek-cost şerit.
         lane_half_width: 1.5
 
-        # 230 = yüksek ama lethal obstacle değil.
-        # Geçilmesini daha da zorlaştırmak istersen 245-252 aralığı kullanılabilir.
         lane_cost: 200
 
 
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
+
         map_subscribe_transient_local: True
 
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+
         cost_scaling_factor: 1.2
-        inflation_radius: 1.5
+        inflation_radius: 3.0
 
 
 map_server:
@@ -349,20 +509,31 @@ map_server:
     use_sim_time: False
     yaml_filename: ""
 
+
 map_saver:
   ros__parameters:
     use_sim_time: False
+
     save_map_timeout: 5.0
+
     free_thresh_default: 0.25
     occupied_thresh_default: 0.65
+
     map_subscribe_transient_local: True
+
 
 planner_server:
   ros__parameters:
 
-    planner_plugins: ["GridBased"]
+    planner_plugins: ["GridBased", "ParkingGrid"]
+
     use_sim_time: False
 
+
+    # ==========================================================
+    # NORMAL SÜRÜŞ PLANNER
+    # SADECE İLERİ
+    # ==========================================================
     GridBased:
       plugin: "nav2_smac_planner/SmacPlannerHybrid"
 
@@ -370,56 +541,45 @@ planner_server:
       # PATH KALITESI
       # ==========================================
 
-      # Önce kaliteyi görelim.
-      # 5cm costmap varsa planner yine 5cm üzerinden çalışsın.
       downsample_costmap: false
       downsampling_factor: 1
 
       tolerance: 0.5
+
       allow_unknown: true
 
       max_iterations: -1
 
-      # 2 çok düşük.
-      # Goal yakınında düzgün çözüm aramasına izin ver.
       max_on_approach_iterations: 1000
 
       max_planning_time: 10.0
 
-      # Ackermann + sadece ileri
+      # ==================================================
+      # SADECE İLERİ
+      # ==================================================
       motion_model_for_search: "DUBIN"
 
       # ==========================================
       # ACKERMANN DONUS GEOMETRISI
       # ==========================================
 
-      # Fiziksel minimum dönüş yarıçapı.
-      # DOKUNMUYORUZ.
-      minimum_turning_radius: 1.4
+      minimum_turning_radius: 2.5
 
-      # Ara heading / curvature seçeneklerini artır.
-      #
-      # Interpolation açıldığı için 72 yapmak yerine
-      # 32-36 civarı iyi başlangıç.
       angle_quantization_bins: 72
+
       allow_primitive_interpolation: true
 
       # ==========================================
       # DUZ GITME TERCIHI
       # ==========================================
 
-      # 10.0 aşırı yüksek.
-      # Düz yolu yine tercih etsin ama viraj gerektiğinde
-      # doğal şekilde yay oluşturabilsin.
       non_straight_penalty: 2.0
 
-      # DUBIN'de reverse zaten kullanılmaz.
+      # DUBIN zaten reverse kullanmaz.
       reverse_penalty: 2.0
 
       change_penalty: 0.50
 
-      # 5.0 biraz agresif.
-      # Costmap merkezine yapışmaya çalışıp path'i bozmasın.
       cost_penalty: 2.0
 
       retrospective_penalty: 0.15
@@ -430,19 +590,20 @@ planner_server:
 
       analytic_expansion_ratio: 3.5
 
-      # 1.5m minimum radius için 3m kısa.
-      # Nav2 dokümantasyonu 4-5 x min radius öneriyor.
       analytic_expansion_max_length: 7.5
 
       analytic_expansion_max_cost: 200.0
+
       analytic_expansion_max_cost_override: false
 
       lookup_table_size: 20.0
 
       cache_obstacle_heuristic: true
+
       debug_visualizations: false
 
       use_quadratic_cost_penalty: false
+
       downsample_obstacle_heuristic: false
 
       goal_heading_mode: "DEFAULT"
@@ -456,82 +617,310 @@ planner_server:
       smoother:
         max_iterations: 1500
 
-        # Path'in zig-zag/köşelerini bastır.
         w_smooth: 0.4
 
-        # Orijinal path'e bağlılık
         w_data: 0.2
 
         tolerance: 1.0e-10
+
         do_refinement: true
+
         refinement_num: 3
+
+
+    # ==========================================================
+    # PARK PLANNER
+    # İLERİ + GERİ
+    # ==========================================================
+    ParkingGrid:
+      plugin: "nav2_smac_planner/SmacPlannerHybrid"
+
+      downsample_costmap: false
+      downsampling_factor: 1
+
+      tolerance: 0.3
+
+      allow_unknown: true
+
+      max_iterations: -1
+
+      max_on_approach_iterations: 2000
+
+      max_planning_time: 10.0
+
+      # ==================================================
+      # İLERİ + GERİ ACKERMANN
+      # ==================================================
+      motion_model_for_search: "DUBIN"
+
+      # Araç fiziksel minimum dönüş yarıçapı.
+      minimum_turning_radius: 2.5
+
+      angle_quantization_bins: 72
+
+      allow_primitive_interpolation: true
+
+      # ==========================================
+      # MANEVRA MALİYETLERİ
+      # ==========================================
+
+      non_straight_penalty: 1.2
+
+      # Geri gitmeye izin ver fakat gereksiz yere
+      # geri gitmesini biraz cezalandır.
+      reverse_penalty: 2.0
+
+      # İleri -> geri veya geri -> ileri
+      # geçişlerinin maliyeti.
+      change_penalty: 0.15
+
+      cost_penalty: 2.0
+
+      retrospective_penalty: 0.15
+
+      # ==========================================
+      # ANALYTIC EXPANSION
+      # ==========================================
+
+      analytic_expansion_ratio: 3.5
+
+      analytic_expansion_max_length: 7.5
+
+      analytic_expansion_max_cost: 200.0
+
+      analytic_expansion_max_cost_override: false
+
+      lookup_table_size: 20.0
+
+      cache_obstacle_heuristic: true
+
+      debug_visualizations: false
+
+      use_quadratic_cost_penalty: false
+
+      downsample_obstacle_heuristic: false
+
+      goal_heading_mode: "DEFAULT"
+
+      # ==========================================
+      # PATH SMOOTHING
+      # ==========================================
+
+      smooth_path: false
+
+      smoother:
+        max_iterations: 1500
+
+        w_smooth: 0.4
+
+        w_data: 0.2
+
+        tolerance: 1.0e-10
+
+        do_refinement: true
+
+        refinement_num: 3
+
 
 smoother_server:
   ros__parameters:
+
     use_sim_time: False
+
     smoother_plugins: ["simple_smoother"]
+
     simple_smoother:
       plugin: "nav2_smoother::SimpleSmoother"
+
       tolerance: 1.0e-10
+
       max_its: 1000
+
       do_refinement: True
+
+
 behavior_server:
   ros__parameters:
+
+    # =====================================================
+    # COSTMAP / FOOTPRINT
+    # =====================================================
+
     costmap_topic: local_costmap/costmap_raw
     footprint_topic: local_costmap/published_footprint
+
     cycle_frequency: 10.0
-    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+
+
+    # =====================================================
+    # BEHAVIOR PLUGINS
+    #
+    # ÖNEMLİ:
+    # "backup" burada mutlaka bulunmalı.
+    # Humble default BT XML'i "backup" action server'ını bekliyor.
+    # =====================================================
+
+    behavior_plugins:
+      [
+        "spin",
+        "backup",
+        "drive_on_heading",
+        "assisted_teleop",
+        "wait"
+      ]
+
+
+    # =====================================================
+    # SPIN
+    # =====================================================
+
     spin:
       plugin: "nav2_behaviors/Spin"
+
+
+    # =====================================================
+    # BACKUP
+    #
+    # Hatanı çözecek ana kısım burası.
+    # Action server adı:
+    #
+    # /backup
+    #
+    # olacaktır.
+    # =====================================================
+
     backup:
       plugin: "nav2_behaviors/BackUp"
+
+
+    # =====================================================
+    # DRIVE ON HEADING
+    # =====================================================
+
     drive_on_heading:
       plugin: "nav2_behaviors/DriveOnHeading"
+
+
+    # =====================================================
+    # WAIT
+    # =====================================================
+
     wait:
       plugin: "nav2_behaviors/Wait"
+
+
+    # =====================================================
+    # ASSISTED TELEOP
+    # =====================================================
+
     assisted_teleop:
       plugin: "nav2_behaviors/AssistedTeleop"
+
+
+    # =====================================================
+    # FRAME AYARLARI
+    # =====================================================
+
     global_frame: odom
     robot_base_frame: base_footprint
+
     transform_tolerance: 0.5
+
+
+    # =====================================================
+    # TIME
+    # =====================================================
+
     use_sim_time: False
+
+
+    # =====================================================
+    # BEHAVIOR AYARLARI
+    # =====================================================
+
     simulate_ahead_time: 2.0
+
     max_rotational_vel: 1.0
+
     min_rotational_vel: 0.4
+
     rotational_acc_lim: 3.2
 
 robot_state_publisher:
   ros__parameters:
     use_sim_time: False
 
+
 waypoint_follower:
   ros__parameters:
+
     use_sim_time: False
+
     loop_rate: 20
+
     stop_on_failure: false
+
     waypoint_task_executor_plugin: "wait_at_waypoint"
+
     wait_at_waypoint:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+
       enabled: True
-      waypoint_pause_duration: 200  # ms cinsinden bekleme süresi
+
+      waypoint_pause_duration: 200
+
 
 velocity_smoother:
   ros__parameters:
+
     use_sim_time: False
+
     smoothing_frequency: 20.0
+
     scale_velocities: False
+
     feedback: "OPEN_LOOP"
+
+    # =====================================================
+    # VELOCITY LIMITLERI
+    # =====================================================
+    #
+    # Burada negatif hız açık BIRAKILIYOR.
+    #
+    # Bunun nedeni ParkFollowPath controller'ın
+    # park sırasında negatif linear.x gönderebilmesi.
+    #
+    # Normal FollowPath:
+    # allow_reversing: false
+    #
+    # Normal GridBased:
+    # DUBIN
+    #
+    # olduğu için normal navigasyonda negatif komut
+    # üretilmeyecek.
+    #
+    # ParkFollowPath:
+    # allow_reversing: true
+    #
+    # ParkingGrid:
+    # REEDS_SHEPP
+    #
+    # olduğu için park.py sırasında geri sürüş mümkün.
+    # =====================================================
+
     max_velocity: [0.8, 0.0, 0.40]
+
+    # Maksimum geri park hızı = 0.20 m/s
     min_velocity: [-0.2, 0.0, -0.40]
-    # max_accel/max_decel'in 3. elemani (z/angular): 0.5 -> 1.0 rad/s^2.
-    # Eskisiyle 0'dan wz_max=0.35'e ulasmak ~0.7s suruyordu - MPPI "tam kirin"
-    # dese bile fiziksel komut gecikmeli/yumusatilarak geliyordu, bu da donuslerde
-    # "cekingen" bir his yaratiyordu. 1.0 ile bu sure ~0.35s'ye iniyor: hala ani
-    # sicramayi (jerk) engelleyen bir rampa var, ama MPPI'nin kararli donus
-    # komutuna cok daha hizli ulasiliyor. Linear (1. eleman) degismedi.
+
     max_accel: [0.5, 0.0, 1.0]
+
     max_decel: [-0.5, 0.0, -1.0]
+
     odom_topic: "odom"
+
     odom_duration: 0.1
+
     deadband_velocity: [0.0, 0.0, 0.0]
+
     velocity_timeout: 1.0

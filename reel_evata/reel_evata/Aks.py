@@ -215,7 +215,7 @@ class STMCommunication(Node):
                 # Signed 16-bit dönüşüm:
                 if self.read_wheel_angle > 32767:
                     self.read_wheel_angle -= 65536
-                if -128 <= self.read_wheel_angle <= 127:
+                if -190 <= self.read_wheel_angle <= 190:
                     self.read_wheel_angle_pub.publish(Int32(data=self.read_wheel_angle))
                 else:
                     self.get_logger().warn(f"Wheel angle out of Int32 range. {self.read_wheel_angle}")
@@ -234,23 +234,23 @@ class STMCommunication(Node):
                 #     self.right_signal_sent = False
 
                 # --- Sol sinyal kontrolü ---
-                if self.read_wheel_angle < -20 and not self.left_signal_sent:
-                    self.left_signal_pub.publish(Int8(data=1))
-                    self.right_signal_pub.publish(Int8(data=0))
-                    self.left_signal_sent = True
-                    self.right_signal_sent = False
+                if self.read_wheel_angle < -100 and not self.left_signal_sent:
+                    self.left_signal_pub.publish(Int8(data=0))
+                    self.right_signal_pub.publish(Int8(data=1))
+                    self.left_signal_sent = False
+                    self.right_signal_sent = True
                     self.signal_off = False
 
-                if self.read_wheel_angle > 20 and not self.right_signal_sent:
-                    self.right_signal_pub.publish(Int8(data=1))
-                    self.left_signal_pub.publish(Int8(data=0))
-                    self.right_signal_sent = True
-                    self.left_signal_sent = False
+                if self.read_wheel_angle > 100 and not self.right_signal_sent:
+                    self.right_signal_pub.publish(Int8(data=0))
+                    self.left_signal_pub.publish(Int8(data=1))
+                    self.right_signal_sent = False
+                    self.left_signal_sent = True
                     self.signal_off = False
                 
                 if not self.signal_off:
-                    self.left_signal_pub.publish(Int8(data=0))
-                    self.right_signal_pub.publish(Int8(data=0))
+                    self.left_signal_pub.publish(Int8(data=1))
+                    self.right_signal_pub.publish(Int8(data=1))
                     self.signal_off = True
                     self.left_signal_sent = False
                     self.right_signal_sent = False

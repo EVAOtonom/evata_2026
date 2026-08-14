@@ -195,8 +195,8 @@ class ImageSaver(Node):
         roi_y_start = 300
         roi_y_end = 580
                    
-        sol_ust=180
-        sag_ust=980	
+        sol_ust=360
+        sag_ust=880	
         sol_alt=0	
         sag_alt=1280
         

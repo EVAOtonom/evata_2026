@@ -96,7 +96,7 @@ class CmdVelSubscriber(Node):
         self.declare_parameter('min_turning_radius', 1.50)      # Minimum dönüş yarıçapı (metre)
 
         # ==================== HIZ PARAMETRELERI ====================
-        self.declare_parameter('max_motor_power', 33)
+        self.declare_parameter('max_motor_power', 35)
         self.declare_parameter('min_motor_power', 28)
         self.declare_parameter('max_velocity', 0.8)          
         self.declare_parameter('vel_kp', 4.0)
@@ -144,7 +144,7 @@ class CmdVelSubscriber(Node):
 
         # ==================== KALKIS / STALL ====================
         self.declare_parameter('stall_boost_rate', 1.0)
-        self.declare_parameter('absolute_max_motor_power', 33)
+        self.declare_parameter('absolute_max_motor_power', 35)
 
         self._load_params()
         self.add_on_set_parameters_callback(self._on_param_update)
