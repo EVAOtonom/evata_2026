@@ -15,8 +15,6 @@ from sensor_msgs_py import point_cloud2
 from tf2_ros import Buffer, TransformListener
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
 
-from nav2_msgs.srv import ClearEntireCostmap
-
 
 def generate_wall_points(
     cx: float,
@@ -64,13 +62,15 @@ class SignDynamicObstacle(Node):
         # Levha bu mesafeden yakınsa tetikle
         self.sign_trigger_distance = 5.0
 
-        # "sol"     → önüne duvar: forward=15m, lateral=0
+        #önüne duvar: forward=15m, lateral=0
         self.front_wall_forward = 15.0
         self.front_wall_lateral = 0.0
+        
+        #sag duvar
         self.right_wall_forward = 7.0
         self.right_wall_lateral = -4.0
 
-        # "soladonulmez" → soluna duvar: forward=7m, lateral=+4m (sol)
+        #soluna duvar: forward=7m, lateral=+4m (sol)
         self.left_wall_forward  = 7.0
         self.left_wall_lateral  = 4.0
 
@@ -121,16 +121,6 @@ class SignDynamicObstacle(Node):
             10,
         )
 
-        # Costmap temizleme servisleri
-        self.clear_local_cli = self.create_client(
-            ClearEntireCostmap,
-            "/local_costmap/clear_entirely_local_costmap",
-        )
-        self.clear_global_cli = self.create_client(
-            ClearEntireCostmap,
-            "/global_costmap/clear_entirely_global_costmap",
-        )
-
         # Aktif duvarları 5 Hz'de yayınla
         self.publish_timer = self.create_timer(0.2, self.publish_all_walls)
 
@@ -156,6 +146,18 @@ class SignDynamicObstacle(Node):
                 "forward": self.left_wall_forward,
                 "lateral": self.left_wall_lateral,
             },
+            "sag": {
+                "forward": self.front_wall_forward,
+                "lateral": self.front_wall_lateral,
+            },
+            "sagadonulmez": {
+                "forward": self.right_wall_forward,
+                "lateral": self.right_wall_lateral,
+            },
+            "girisiyok": {
+                "forward": self.front_wall_forward,
+                "lateral": self.front_wall_lateral,
+            },                                    
         }
 
         for sign_key, cfg in sign_configs.items():
@@ -178,12 +180,20 @@ class SignDynamicObstacle(Node):
             self.create_wall(sign_key, cfg["forward"], cfg["lateral"])
             
             if sign_key == "sol" and "soladon_sag" not in self.walls:
-                self.get_logger().info("[sol] sag duvar da olusturuluyor")
+                self.get_logger().info("+Sag duvar da olusturuluyor")
                 self.create_wall(
                     "soladon_sag",
                     self.right_wall_forward,
                     self.right_wall_lateral,
                 )
+            if sign_key == "sag" and "sagadon_sol" not in self.walls:
+                self.get_logger().info("+Sol duvar da olusturuluyor")
+                self.create_wall(
+                    "sagadon_sol",
+                    self.left_wall_forward,
+                    self.left_wall_lateral,
+                )                
+            
 
 
     # ══════════════════════════════════════════
@@ -224,8 +234,8 @@ class SignDynamicObstacle(Node):
 
         # soladon     → duvar ARAÇA DIK (önü keser, düz gitmeyi engeller)
         # soladonulmez → duvar ARAÇA PARALEL (sol seridi keser)
-        if sign_key == "sol":
-            wall_yaw = yaw + math.pi / 2.0
+        if sign_key == "sag" or sign_key == "sol":
+            wall_yaw = yaw + math.pi / 2.0          
         else:
             wall_yaw = yaw
 
@@ -372,24 +382,10 @@ class SignDynamicObstacle(Node):
         for _ in range(5):
             self.obstacle_pub.publish(empty_cloud)
             self.obstacle_global_pub.publish(empty_cloud)
-
-        # Costmap'i servis ile zorla temizle (raytrace ile temizlenmeyen kalıntı hücreler için)
-        self._call_clear_costmaps()
-
+ 
         self.get_logger().info(f"DUVAR SILINDI [{sign_key}] — costmap temizlendi")
 
-    def _call_clear_costmaps(self):
-        req = ClearEntireCostmap.Request()
 
-        if self.clear_local_cli.service_is_ready():
-            self.clear_local_cli.call_async(req)
-        else:
-            self.get_logger().warn("local_costmap clear servisi hazir degil")
-
-        if self.clear_global_cli.service_is_ready():
-            self.clear_global_cli.call_async(req)
-        else:
-            self.get_logger().warn("global_costmap clear servisi hazir degil")
 
     def destroy_node(self):
         for wall in self.walls.values():
