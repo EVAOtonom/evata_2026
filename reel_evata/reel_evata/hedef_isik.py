@@ -42,7 +42,7 @@ class SequentialNav2(Node):
         self._red_light_timeout_timer = None
 
         self.traffic_light_zones = [
-            {'x_min': -0.4, 'x_max': 10.8, 'y_min': 0.42, 'y_max': 48.3},
+            {'x_min': -28.6, 'x_max': -20.1, 'y_min': 26.1, 'y_max': 34.6},
         ]
 
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
