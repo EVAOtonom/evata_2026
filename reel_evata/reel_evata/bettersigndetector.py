@@ -57,9 +57,9 @@ class SignDetectorWithNavigation(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.create_subscription(Image, "/zed2i/zed_node/rgb/image_rect_color", self.color_image_callback, 10)
-        self.create_subscription(CameraInfo, "/zed2i/zed_node/rgb/camera_info", self.camera_info_callback, 10)
-        self.create_subscription(PointCloud2, "/zed2i/zed_node/point_cloud/cloud_registered", self.point_cloud_callback, 10)
+        self.create_subscription(Image, "/zed/zed_node/rgb/image_rect_color", self.color_image_callback, 10)
+        self.create_subscription(CameraInfo, "/zed/zed_node/rgb/camera_info", self.camera_info_callback, 10)
+        self.create_subscription(PointCloud2, "/zed/zed_node/point_cloud/cloud_registered", self.point_cloud_callback, 10)
 
         self.sign_publisher = self.create_publisher(String, "/detected_signs", 10)
 
